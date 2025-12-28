@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+/* ייבוא גופן Assistant */
+@import url('https://fonts.googleapis.com/css2?family=Assistant:wght@200;400;700;800&display=swap');
+
+@theme {
+  --font-sans: "Assistant", ui-sans-serif, system-ui, sans-serif;
+  --color-accent: #fbbf24;
+}
+
+body {
+  /* שימוש ב-apply אחרי ייבוא tailwind */
+  @apply bg-gray-50 text-gray-900;
+  font-family: var(--font-sans);
+  direction: rtl;
+  text-align: right;
+}
