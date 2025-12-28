@@ -14,49 +14,54 @@ export const PaymentManager = ({ clientId }) => {
 
   useEffect(() => { fetchPayments(); }, [clientId]);
 
-  const generateSchedule = async () => {
-    const total = prompt('הזיני סכום כולל לגבייה:');
-    if (!total) return;
+  const toggleStatus = async (paymentId, currentStatus) => {
+    const newStatus = currentStatus === 'paid' ? 'pending' : 'paid';
     try {
-      await api.post('/admin/payments/schedule', {
-        clientId,
-        totalAmount: parseFloat(total),
-        installments: 3,
-        startDate: new Date().toISOString().split('T')[0]
-      });
+      await api.patch(`/admin/payments/${paymentId}`, { status: newStatus });
       fetchPayments();
-    } catch (err) { alert('שגיאה בהפקת תשלומים'); }
+    } catch (err) { alert('שגיאה בעדכון הסטטוס'); }
   };
 
   return (
-    <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
-      <div className="flex justify-between items-center mb-6">
-        <h3 className="text-xl font-black text-gray-900">לוח תשלומים וגבייה</h3>
-        <button onClick={generateSchedule} className="text-accent font-black text-sm hover:underline">
-          + הפקת לוח תשלומים אוטומטי
-        </button>
+    <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+      <div className="flex justify-between items-center mb-8">
+        <h3 className="text-2xl font-black text-gray-900">ניהול גבייה ותשלומים</h3>
+        <div className="bg-gray-50 px-4 py-2 rounded-xl">
+           <span className="text-xs text-gray-400 font-bold ml-2">סה"כ שולם:</span>
+           <span className="font-black text-green-600">
+             {payments.filter(p => p.status === 'paid').reduce((sum, p) => sum + parseFloat(p.amount), 0)} ₪
+           </span>
+        </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-3">
         {payments.length > 0 ? payments.map((p, idx) => (
-          <div key={p.id} className="flex items-center justify-between p-5 bg-gray-50 rounded-2xl border border-transparent hover:border-gray-200 transition-all">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-full bg-white border flex items-center justify-center font-bold text-gray-400">
+          <div key={p.id} className="group flex items-center justify-between p-4 rounded-2xl border-2 border-gray-50 hover:border-yellow-100 transition-all bg-white hover:shadow-md">
+            <div className="flex items-center gap-5">
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black ${p.status === 'paid' ? 'bg-green-100 text-green-600' : 'bg-yellow-50 text-yellow-600'}`}>
                 {idx + 1}
               </div>
               <div>
-                <p className="font-bold text-gray-900">{p.amount} ₪</p>
-                <p className="text-xs text-gray-400">מועד פירעון: {new Date(p.due_date).toLocaleDateString('he-IL')}</p>
+                <p className="font-black text-gray-900 text-lg">{p.amount} ₪</p>
+                <p className="text-xs text-gray-400 font-bold">מועד: {new Date(p.due_date).toLocaleDateString('he-IL')}</p>
               </div>
             </div>
-            <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase ${
-              p.status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-400'
-            }`}>
-              {p.status === 'paid' ? 'שולם' : 'ממתין'}
-            </span>
+            
+            <button 
+              onClick={() => toggleStatus(p.id, p.status)}
+              className={`px-6 py-2 rounded-xl font-black text-xs transition-all ${
+                p.status === 'paid' 
+                ? 'bg-green-600 text-white shadow-lg shadow-green-100' 
+                : 'bg-white border-2 border-gray-100 text-gray-400 hover:border-yellow-400 hover:text-yellow-600'
+              }`}
+            >
+              {p.status === 'paid' ? 'שולם ✅' : 'סמן כסולק'}
+            </button>
           </div>
         )) : (
-          <div className="text-center py-10 text-gray-300 font-bold">טרם הופקו תשלומים ללקוחה זו</div>
+          <div className="py-12 text-center bg-gray-50 rounded-[2rem] border-2 border-dashed border-gray-100">
+            <p className="text-gray-300 font-bold text-lg">טרם הוגדרו תשלומים</p>
+          </div>
         )}
       </div>
     </div>

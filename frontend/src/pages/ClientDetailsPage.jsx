@@ -3,8 +3,8 @@ import api from '../services/api';
 import { ClientHeader } from '../components/clients/ClientHeader';
 import { PaymentManager } from '../components/payments/PaymentManager';
 import { ContractManager } from '../components/contracts/ContractManager';
-import { ClientInfoGrid } from '../components/clients/ClientInfoGrid';
 import { EditClientModal } from '../components/clients/EditClientModal';
+import { QuickNotes } from '../components/clients/QuickNotes';
 
 export const ClientDetailsPage = ({ clientId, onBack }) => {
   const [client, setClient] = useState(null);
@@ -14,70 +14,52 @@ export const ClientDetailsPage = ({ clientId, onBack }) => {
     api.get(`/clients/${clientId}`).then(res => setClient(res.data));
   };
 
-  useEffect(() => { fetchClient(); }, [clientId]);
+  useEffect(() => { 
+    if (clientId) fetchClient(); 
+  }, [clientId]);
 
-  if (!client) return <div className="p-20 text-center font-bold text-gray-400 animate-pulse">טוען נתונים...</div>;
+  if (!client) return <div className="p-20 text-center font-bold text-gray-400">טוען נתונים...</div>;
 
   return (
-    <div className="max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700 text-right" dir="rtl">
-      {/* כפתור חזרה מעוצב */}
-      <button onClick={onBack} className="mb-8 group flex items-center gap-3 text-gray-400 hover:text-gray-900 transition-all font-bold">
-        <span className="w-8 h-8 rounded-full bg-white border flex items-center justify-center group-hover:bg-gray-900 group-hover:text-white transition-all shadow-sm">→</span>
-        חזרה לרשימת הכלות
+    <div className="max-w-6xl mx-auto animate-in fade-in duration-700 text-right" dir="rtl">
+      <button onClick={onBack} className="mb-8 flex items-center gap-2 text-gray-400 hover:text-gray-900 font-bold transition-all">
+        <span className="w-8 h-8 rounded-full bg-white border flex items-center justify-center shadow-sm">→</span>
+        חזרה לרשימה
       </button>
 
-      {/* כותרת הכרטיס עם כפתור עריכה */}
-      <div className="relative">
-        <ClientHeader client={client} />
-        <button 
-          onClick={() => setIsEditOpen(true)}
-          className="absolute left-8 top-1/2 -translate-y-1/2 bg-gray-50 hover:bg-yellow-400 hover:text-white p-3 rounded-xl transition-all font-black text-xs text-gray-400 border border-gray-100"
-        >
-          עריכת פרטים ✏️
-        </button>
-      </div>
+      <ClientHeader client={client} onEdit={() => setIsEditOpen(true)} onDeleteSuccess={onBack} />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-8">
-        {/* עמודה מרכזית - תשלומים וחוזים */}
         <div className="lg:col-span-8 space-y-8">
           <PaymentManager clientId={clientId} />
           <ContractManager clientId={clientId} clientName={client.full_name} phone={client.phone} />
-          <ClientInfoGrid client={client} />
+          
+          {/* שאלונים ומידע דינמי בלבד (ללא הערות כפולות) */}
+          <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+             <h3 className="text-xl font-black text-gray-900 mb-6">מידע נוסף משאלונים</h3>
+             <p className="text-gray-400 font-bold text-sm italic text-center py-10">המידע יוצג כאן לאחר מילוי שאלון על ידי הכלה</p>
+          </div>
         </div>
 
-        {/* עמודה צדדית - מידע מהיר */}
         <div className="lg:col-span-4 space-y-8">
+          <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+            <h3 className="text-xl font-black text-gray-900 mb-2">הערות עבודה</h3>
+            <p className="text-[10px] text-gray-400 mb-4 font-bold uppercase tracking-widest">נשמר אוטומטית</p>
+            <QuickNotes clientId={clientId} initialNotes={client.general_notes} />
+          </div>
+
           <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm sticky top-24">
-            <h3 className="text-xl font-black text-gray-900 mb-6">סיכום כלה</h3>
-            <div className="space-y-6">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 font-bold text-sm">סטטוס נוכחי</span>
-                <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-lg font-black text-xs uppercase">{client.status_name}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 font-bold text-sm">מקור הגעה</span>
-                <span className="font-black text-gray-700">{client.source || 'אורגני'}</span>
-              </div>
-              <div className="pt-6 border-t border-gray-50">
-                <p className="text-[10px] text-gray-400 font-black uppercase mb-2">פעולות מהירות</p>
-                <button className="w-full text-right p-3 hover:bg-gray-50 rounded-xl transition-colors font-bold text-gray-700 flex items-center gap-2">
-                  <span>📅</span> קביעת פגישת ניסיון
-                </button>
-                <button className="w-full text-right p-3 hover:bg-gray-50 rounded-xl transition-colors font-bold text-gray-700 flex items-center gap-2">
-                  <span>💌</span> שליחת הודעת מזל טוב
-                </button>
-              </div>
+            <h3 className="text-lg font-black text-gray-900 mb-4">פרטי ליד</h3>
+            <div className="space-y-4 text-sm">
+              <div className="flex justify-between border-b pb-2"><span className="text-gray-400 font-bold">מקור:</span><span className="font-black text-gray-700">{client.source}</span></div>
+              <div className="flex justify-between border-b pb-2"><span className="text-gray-400 font-bold">סטטוס:</span><span className="font-black text-accent">{client.status_name}</span></div>
+              <div className="flex justify-between pb-2"><span className="text-gray-400 font-bold">נוצרה:</span><span className="font-black text-gray-700">{new Date(client.created_at).toLocaleDateString('he-IL')}</span></div>
             </div>
           </div>
         </div>
       </div>
 
-      <EditClientModal 
-        isOpen={isEditOpen} 
-        onClose={() => setIsEditOpen(false)} 
-        client={client} 
-        onRefresh={fetchClient} 
-      />
+      <EditClientModal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} client={client} onRefresh={fetchClient} />
     </div>
   );
 };

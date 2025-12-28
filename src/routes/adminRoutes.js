@@ -39,3 +39,19 @@ router.get('/whatsapp/groups/:session', async (req, res) => {
 });
 
 module.exports = router;
+
+// נתיבים להגדרות מערכת
+router.get('/settings/:key', async (req, res) => {
+    try {
+        const result = await require('../config/db').query('SELECT values FROM system_settings WHERE key = $1', [req.params.key]);
+        res.json(result.rows[0]?.values || []);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/settings/:key', async (req, res) => {
+    try {
+        const { values } = req.body;
+        await require('../config/db').query('UPDATE system_settings SET values = $1 WHERE key = $2', [values, req.params.key]);
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});

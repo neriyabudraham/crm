@@ -1,74 +1,58 @@
 const db = require('../config/db');
 
-const getClients = async (req, res) => {
-    const { entity_type } = req.query;
+// יצירת ליד חדש עם תמיכה בשדות מותאמים וסטטוס
+exports.createClient = async (req, res) => {
+    const { full_name, phone, email, source, status_name, custom_fields_data = {}, entity_type = 'bride' } = req.body;
     try {
-        let query = 'SELECT * FROM clients';
-        let params = [];
-        if (entity_type) {
-            query += ' WHERE entity_type = $1';
-            params.push(entity_type);
+        // בדיקת כפילות טלפון
+        const existing = await db.query('SELECT id FROM clients WHERE phone = $1 AND entity_type = $2', [phone, entity_type]);
+        if (existing.rows.length > 0) {
+            return res.status(409).json({ error: 'DUPLICATE', message: 'מספר הטלפון כבר קיים במערכת' });
         }
-        query += ' ORDER BY id DESC';
-        const result = await db.query(query, params);
-        res.json(result.rows);
+
+        const result = await db.query(
+            'INSERT INTO clients (full_name, phone, email, source, status_name, custom_fields_data, entity_type) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+            [full_name, phone, email, source, status_name || 'חדש', custom_fields_data, entity_type]
+        );
+        res.status(201).json(result.rows[0]);
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: err.message });
     }
 };
 
-const getClientById = async (req, res) => {
+// עדכון ליד (כולל שדות מותאמים)
+exports.updateClient = async (req, res) => {
     const { id } = req.params;
-    try {
-        const result = await db.query('SELECT * FROM clients WHERE id = $1', [id]);
-        if (result.rows.length === 0) return res.status(404).json({ message: 'Client not found' });
-        res.json(result.rows[0]);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-};
-
-const createClient = async (req, res) => {
-    const { full_name, phone, email, entity_type } = req.body;
+    const { full_name, phone, email, status_name, source, custom_fields_data, general_notes } = req.body;
     try {
         const result = await db.query(
-            'INSERT INTO clients (full_name, phone, email, entity_type) VALUES ($1, $2, $3, $4) RETURNING id',
-            [full_name, phone, email, entity_type]
+            `UPDATE clients 
+             SET full_name = COALESCE($1, full_name), 
+                 phone = COALESCE($2, phone), 
+                 email = COALESCE($3, email), 
+                 status_name = COALESCE($4, status_name), 
+                 source = COALESCE($5, source), 
+                 custom_fields_data = COALESCE($6, custom_fields_data),
+                 general_notes = COALESCE($7, general_notes)
+             WHERE id = $8 RETURNING *`,
+            [full_name, phone, email, status_name, source, custom_fields_data, general_notes, id]
         );
-        res.status(201).json({ id: result.rows[0].id, full_name, phone });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+        res.json(result.rows[0]);
+    } catch (err) { res.status(500).json({ error: err.message }); }
 };
 
-const updateClient = async (req, res) => {
-    const { id } = req.params;
-    const { full_name, phone, email, status_name } = req.body;
-    try {
-        await db.query(
-            'UPDATE clients SET full_name = $1, phone = $2, email = $3, status_name = $4 WHERE id = $5',
-            [full_name, phone, email, status_name, id]
-        );
-        res.json({ message: 'Client updated successfully' });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+exports.deleteClient = async (req, res) => {
+    await db.query('DELETE FROM clients WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
 };
 
-const deleteClient = async (req, res) => {
-    const { id } = req.params;
-    try {
-        await db.query('DELETE FROM clients WHERE id = $1', [id]);
-        res.json({ message: 'Client deleted' });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+exports.getClients = async (req, res) => {
+    const result = await db.query('SELECT * FROM clients ORDER BY created_at DESC');
+    res.json(result.rows);
 };
 
-module.exports = {
-    getClients,
-    getClientById,
-    createClient,
-    updateClient,
-    deleteClient
+exports.getClientById = async (req, res) => {
+    const result = await db.query('SELECT * FROM clients WHERE id = $1', [req.params.id]);
+    res.json(result.rows[0]);
 };
