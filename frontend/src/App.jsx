@@ -11,6 +11,7 @@ import { QuestionnairePublicPage } from './pages/QuestionnairePublicPage';
 import { LandingPage } from './pages/LandingPage';
 import { AuthPage } from './pages/AuthPage';
 import { SuperAdminPage } from './pages/SuperAdminPage';
+import { useDialog } from './components/ui/Dialog';
 import './index.css';
 
 // ========== helpers ==========
@@ -45,6 +46,7 @@ const parsePath = (pathname) => {
 };
 
 function App() {
+  const { toast } = useDialog();
   // ========== auth + account state ==========
   const [user, setUser] = useState(() => safeParse('user', null));
   const [accounts, setAccounts] = useState(() => {
@@ -93,7 +95,7 @@ function App() {
         navigate('/brides', { replace: true });
       })
       .catch(err => {
-        alert('שגיאה באימות Google: ' + (err.response?.data?.error || err.message));
+        toast.error('שגיאה באימות Google: ' + (err.response?.data?.error || err.message));
         navigate('/login', { replace: true });
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -156,7 +158,7 @@ function App() {
       setCurrentAccount(newCurrent);
       localStorage.setItem('currentAccount', JSON.stringify(newCurrent));
       navigate('/brides');
-    } catch (err) { alert(err.response?.data?.error || 'שגיאה בהחלפת חשבון'); }
+    } catch (err) { toast.error(err.response?.data?.error || 'שגיאה בהחלפת חשבון'); }
   };
 
   const handleLogout = () => {

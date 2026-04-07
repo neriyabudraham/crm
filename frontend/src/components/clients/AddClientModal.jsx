@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
+import { useDialog } from '../ui/Dialog';
 
 export const AddClientModal = ({ isOpen, onClose, onRefresh, entityType = 'bride' }) => {
+  const { toast } = useDialog();
   const [formData, setFormData] = useState({ full_name: '', phone: '', email: '', source: '', status_name: '' });
   const [customFields, setCustomFields] = useState([]);
   const [customValues, setCustomValues] = useState({});
@@ -42,18 +44,19 @@ export const AddClientModal = ({ isOpen, onClose, onRefresh, entityType = 'bride
     const requiredFields = customFields.filter(f => f.is_required);
     for (const f of requiredFields) {
       if (!customValues[f.id] || !customValues[f.id].toString().trim()) {
-        alert(`השדה "${f.field_name}" הוא שדה חובה`);
+        toast.error(`השדה "${f.field_name}" הוא שדה חובה`);
         return;
       }
     }
     try {
       await api.post('/clients', { ...formData, custom_fields_data: customValues, entity_type: entityType, ...options });
+      toast.success('הליד נוסף בהצלחה');
       onRefresh(); onClose(); setDuplicateError(null);
       setFormData({ full_name: '', phone: '', email: '', source: '', status_name: '' });
       setCustomValues({});
     } catch (err) {
       if (err.response?.status === 409) setDuplicateError(err.response.data.message);
-      else alert('שגיאה בשמירה');
+      else toast.error('שגיאה בשמירה');
     }
   };
 

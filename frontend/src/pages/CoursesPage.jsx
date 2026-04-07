@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import api from '../services/api';
 import { AddClientModal } from '../components/clients/AddClientModal';
+import { useDialog } from '../components/ui/Dialog';
 
 export const CoursesPage = ({ onSelectClient }) => {
+  const { confirm } = useDialog();
   const [clients, setClients] = useState([]);
   const [courses, setCourses] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -99,7 +101,7 @@ export const CoursesPage = ({ onSelectClient }) => {
                   <span className="font-bold text-sm">{c.title}</span>
                   {c.price > 0 && <span className="text-[10px] text-gray-400 mr-2">({c.price} ₪)</span>}
                 </div>
-                <button onClick={async () => { if (confirm('למחוק?')) { await api.delete(`/courses/${c.id}`); fetchData(); } }} className="text-red-400 text-xs hover:text-red-600">✕</button>
+                <button onClick={async () => { if (await confirm('למחוק את הקורס?', { destructive: true, confirmText: 'מחק' })) { await api.delete(`/courses/${c.id}`); fetchData(); } }} className="text-red-400 text-xs hover:text-red-600">✕</button>
               </div>
             ))}
           </div>

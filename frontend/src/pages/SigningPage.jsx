@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import api from '../services/api';
+import { useDialog } from '../components/ui/Dialog';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 
 export const SigningPage = ({ token }) => {
+  const { toast } = useDialog();
   const [session, setSession] = useState(null);
   const [elements, setElements] = useState([]);
   const [error, setError] = useState(null);
@@ -102,7 +104,7 @@ export const SigningPage = ({ token }) => {
     const ctx = canvas.getContext('2d');
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const isEmpty = !imageData.data.some((pixel, i) => i % 4 === 3 && pixel > 0);
-    if (isEmpty) return alert('אנא חתום לפני האישור');
+    if (isEmpty) { toast.warning('אנא חתום לפני האישור'); return; }
     const dataUrl = canvas.toDataURL('image/png');
     // שמור חתימה לכל שדות חתימה (חתימה אחת משותפת)
     const sigEls = elements.filter(e => e.type === 'signature');
@@ -115,17 +117,20 @@ export const SigningPage = ({ token }) => {
   const handleSubmit = async () => {
     const sigEls = elements.filter(e => e.type === 'signature');
     if (sigEls.length > 0 && !signatures[sigEls[0].id]) {
-      return alert('אנא חתום על המסמך לפני השליחה');
+      toast.warning('אנא חתום על המסמך לפני השליחה');
+      return;
     }
     // בדיקת שדות חובה
     for (const el of elements) {
       if (el.required && (el.type === 'text' || el.type === 'select' || el.type === 'date')) {
         if (!formData[el.id] || !formData[el.id].toString().trim()) {
-          return alert(`יש למלא את השדה: ${el.placeholder || el.label || 'שדה חובה'}`);
+          toast.warning(`יש למלא את השדה: ${el.placeholder || el.label || 'שדה חובה'}`);
+          return;
         }
       }
       if (el.required && el.type === 'checkbox' && !formData[el.id]) {
-        return alert(`יש לסמן: ${el.checkboxLabel || 'שדה חובה'}`);
+        toast.warning(`יש לסמן: ${el.checkboxLabel || 'שדה חובה'}`);
+        return;
       }
     }
     setSigning(true);
@@ -135,7 +140,7 @@ export const SigningPage = ({ token }) => {
       setDownloadUrl(res.data.downloadUrl);
       setSigned(true);
     } catch (err) {
-      alert('שגיאה: ' + (err.response?.data?.error || err.message));
+      toast.error('שגיאה: ' + (err.response?.data?.error || err.message));
     } finally { setSigning(false); }
   };
 

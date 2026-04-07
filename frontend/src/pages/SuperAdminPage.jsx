@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useDialog } from '../components/ui/Dialog';
 
 const adminApi = axios.create({ baseURL: 'https://crm.botomat.co.il/api/superadmin' });
 adminApi.interceptors.request.use(c => {
@@ -9,6 +10,7 @@ adminApi.interceptors.request.use(c => {
 });
 
 export const SuperAdminPage = () => {
+  const { toast, confirm } = useDialog();
   const [admin, setAdmin] = useState(() => {
     try { return JSON.parse(localStorage.getItem('adminUser')); } catch { return null; }
   });
@@ -59,31 +61,33 @@ export const SuperAdminPage = () => {
   };
 
   const toggleAccount = async (id, is_active) => {
-    if (!confirm(is_active ? 'להפעיל מחדש את החשבון?' : 'לחסום את החשבון?')) return;
+    if (!await confirm(is_active ? 'להפעיל מחדש את החשבון?' : 'לחסום את החשבון?', { confirmText: is_active ? 'הפעל' : 'חסום', destructive: !is_active })) return;
     try {
       await adminApi.patch(`/accounts/${id}`, { is_active });
       setAccounts(accounts.map(a => a.id === id ? { ...a, is_active } : a));
-    } catch (err) { alert(err.response?.data?.error || 'שגיאה'); }
+      toast.success(is_active ? 'החשבון הופעל' : 'החשבון נחסם');
+    } catch (err) { toast.error(err.response?.data?.error || 'שגיאה'); }
   };
 
   const deleteAccount = async (id, name) => {
-    if (!confirm(`למחוק את החשבון "${name}" לצמיתות? פעולה זו תמחק את כל הנתונים.`)) return;
-    if (!confirm('בטוח לחלוטין? אין דרך חזרה.')) return;
+    if (!await confirm(`למחוק את החשבון "${name}" לצמיתות? פעולה זו תמחק את כל הנתונים.`, { destructive: true, confirmText: 'מחק' })) return;
+    if (!await confirm('בטוח לחלוטין? אין דרך חזרה.', { destructive: true, confirmText: 'מחק לצמיתות' })) return;
     try {
       await adminApi.delete(`/accounts/${id}`);
       setAccounts(accounts.filter(a => a.id !== id));
-    } catch (err) { alert(err.response?.data?.error || 'שגיאה'); }
+      toast.success('החשבון נמחק');
+    } catch (err) { toast.error(err.response?.data?.error || 'שגיאה'); }
   };
 
   const loginAsAccount = async (id, name) => {
-    if (!confirm(`להתחבר כ-"${name}"? תועבר לממשק שלו.`)) return;
+    if (!await confirm(`להתחבר כ-"${name}"? תועבר לממשק שלו.`, { confirmText: 'התחבר', icon: '👁' })) return;
     try {
       const r = await adminApi.post(`/accounts/${id}/login-as`);
       localStorage.setItem('accessToken', r.data.accessToken);
       localStorage.setItem('account', JSON.stringify(r.data.account));
       localStorage.setItem('impersonatedBy', admin.email);
       window.location.href = '/';
-    } catch (err) { alert(err.response?.data?.error || 'שגיאה'); }
+    } catch (err) { toast.error(err.response?.data?.error || 'שגיאה'); }
   };
 
   // ---------- LOGIN SCREEN ----------

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import api from '../../services/api';
+import { useDialog } from '../ui/Dialog';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 
@@ -14,6 +15,7 @@ const ELEMENT_TYPES = [
 ];
 
 export const TemplateEditor = ({ template, onSave, onClose }) => {
+  const { toast } = useDialog();
   const [pages, setPages] = useState([]);
   const [elements, setElements] = useState(template.elements || []);
   const [selectedId, setSelectedId] = useState(null);
@@ -161,8 +163,9 @@ export const TemplateEditor = ({ template, onSave, onClose }) => {
         signature_positions: pdfElements.filter(e => e.type === 'signature'),
         elements: pdfElements
       });
+      toast.success('התבנית נשמרה');
       onSave();
-    } catch (err) { alert('שגיאה בשמירה'); }
+    } catch (err) { toast.error('שגיאה בשמירה'); }
     finally { setSaving(false); }
   };
 

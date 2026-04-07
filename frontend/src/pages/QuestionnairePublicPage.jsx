@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
+import { useDialog } from '../components/ui/Dialog';
 
 export const QuestionnairePublicPage = ({ token }) => {
+  const { toast } = useDialog();
   const [session, setSession] = useState(null);
   const [error, setError] = useState(null);
   const [submitted, setSubmitted] = useState(false);
@@ -29,8 +31,8 @@ export const QuestionnairePublicPage = ({ token }) => {
     // בדיקת גודל
     const isImage = file.type.startsWith('image/');
     const isVideo = file.type.startsWith('video/');
-    if (isImage && file.size > 5 * 1024 * 1024) return alert('תמונה מעל 5MB');
-    if (isVideo && file.size > 10 * 1024 * 1024) return alert('סרטון מעל 10MB');
+    if (isImage && file.size > 5 * 1024 * 1024) { toast.warning('תמונה מעל 5MB'); return; }
+    if (isVideo && file.size > 10 * 1024 * 1024) { toast.warning('סרטון מעל 10MB'); return; }
 
     setUploading(prev => ({ ...prev, [fieldId]: true }));
     try {
@@ -40,7 +42,7 @@ export const QuestionnairePublicPage = ({ token }) => {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setAnswers(prev => ({ ...prev, [fieldId]: res.data.url }));
-    } catch (err) { alert('שגיאה בהעלאה'); }
+    } catch (err) { toast.error('שגיאה בהעלאה'); }
     finally { setUploading(prev => ({ ...prev, [fieldId]: false })); }
   };
 
@@ -49,7 +51,7 @@ export const QuestionnairePublicPage = ({ token }) => {
     const fields = session.fields || [];
     for (const f of fields) {
       if (f.required && (!answers[f.id] || !answers[f.id].toString().trim())) {
-        alert(`השדה "${f.label}" הוא שדה חובה`);
+        toast.warning(`השדה "${f.label}" הוא שדה חובה`);
         return;
       }
     }
@@ -58,7 +60,7 @@ export const QuestionnairePublicPage = ({ token }) => {
       await api.post(`/questionnaires/session/${token}/submit`, { answers });
       setSubmitted(true);
     } catch (err) {
-      alert('שגיאה: ' + (err.response?.data?.error || err.message));
+      toast.error('שגיאה: ' + (err.response?.data?.error || err.message));
     } finally { setSubmitting(false); }
   };
 

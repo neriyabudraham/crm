@@ -5,8 +5,10 @@ import { PaymentManager } from '../components/payments/PaymentManager';
 import { ContractManager } from '../components/contracts/ContractManager';
 import { EditClientModal } from '../components/clients/EditClientModal';
 import { QuickNotes } from '../components/clients/QuickNotes';
+import { useDialog } from '../components/ui/Dialog';
 
 export const ClientDetailsPage = ({ clientId, onBack }) => {
+  const { toast } = useDialog();
   const [client, setClient] = useState(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [questionnaires, setQuestionnaires] = useState([]);
@@ -58,7 +60,7 @@ export const ClientDetailsPage = ({ clientId, onBack }) => {
       }
       loadQuestionnaires();
       fetchClient(); // רענון פרטי לקוח (שדות ממופים)
-    } catch (err) { alert('שגיאה'); }
+    } catch (err) { toast.error('שגיאה בשליחת השאלון'); }
   };
 
   const copyQLink = async (token) => {

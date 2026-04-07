@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
+import { useDialog } from '../ui/Dialog';
 
 export const ContractManager = ({ clientId, clientName, phone }) => {
+  const { toast, confirm } = useDialog();
   const [templates, setTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [sessions, setSessions] = useState([]);
@@ -30,8 +32,9 @@ export const ContractManager = ({ clientId, clientName, phone }) => {
     setCreating(true);
     try {
       await api.post('/signing/sessions', { client_id: clientId, template_id: selectedTemplate });
+      toast.success('החוזה נוצר');
       loadHistory();
-    } catch (err) { alert('שגיאה'); }
+    } catch (err) { toast.error('שגיאה ביצירת החוזה'); }
     finally { setCreating(false); }
   };
 
@@ -57,14 +60,16 @@ export const ContractManager = ({ clientId, clientName, phone }) => {
   };
 
   const deleteDoc = async (id) => {
-    if (!confirm('למחוק?')) return;
+    if (!await confirm('למחוק את המסמך החתום?', { destructive: true, confirmText: 'מחק' })) return;
     await api.delete(`/signing/documents/${id}`);
+    toast.success('המסמך נמחק');
     loadHistory();
   };
 
   const deleteSession = async (id) => {
-    if (!confirm('למחוק?')) return;
+    if (!await confirm('למחוק את לינק החתימה?', { destructive: true, confirmText: 'מחק' })) return;
     await api.delete(`/signing/sessions/${id}`);
+    toast.success('הלינק נמחק');
     loadHistory();
   };
 

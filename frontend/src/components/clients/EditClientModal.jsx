@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
+import { useDialog } from '../ui/Dialog';
 
 export const EditClientModal = ({ isOpen, onClose, client, onRefresh }) => {
+  const { toast } = useDialog();
   const [formData, setFormData] = useState({});
   const [customFields, setCustomFields] = useState([]);
   const [sources, setSources] = useState([]);
@@ -20,8 +22,9 @@ export const EditClientModal = ({ isOpen, onClose, client, onRefresh }) => {
     e.preventDefault();
     try {
       await api.patch(`/clients/${client.id}`, formData);
+      toast.success('הפרטים נשמרו');
       onRefresh(); onClose();
-    } catch (err) { alert('שגיאה בעדכון'); }
+    } catch (err) { toast.error('שגיאה בעדכון'); }
   };
 
   if (!isOpen) return null;

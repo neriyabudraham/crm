@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
+import { useDialog } from '../ui/Dialog';
 
 export const EntitySettingsModal = ({ isOpen, onClose, entityType, allColumns, visibleColumns, setVisibleColumns }) => {
+  const { toast } = useDialog();
   const [activeTab, setActiveTab] = useState('columns');
   const [fields, setFields] = useState([]);
   const [statuses, setStatuses] = useState([]);
@@ -77,7 +79,7 @@ export const EntitySettingsModal = ({ isOpen, onClose, entityType, allColumns, v
   const savePaymentDefaults = async () => {
     await api.post(`/admin/settings/${entityType}_default_advance`, { values: defaultAdvance });
     await api.post(`/admin/settings/${entityType}_default_deal`, { values: defaultDeal });
-    alert('נשמר!');
+    toast.success('נשמר!');
   };
 
   // --- שיוך שאלון/תבנית ---

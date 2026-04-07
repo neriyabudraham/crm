@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DeleteConfirmModal } from '../ui/DeleteConfirmModal';
 import api from '../../services/api';
+import { useDialog } from '../ui/Dialog';
 
 export const ClientHeader = ({ client, onEdit, onDeleteSuccess, onRefresh }) => {
+  const { toast } = useDialog();
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [statuses, setStatuses] = useState([]);
   const [statusColors, setStatusColors] = useState({});
@@ -34,7 +36,7 @@ export const ClientHeader = ({ client, onEdit, onDeleteSuccess, onRefresh }) => 
       await api.delete(`/clients/${client.id}`);
       setIsDeleteModalOpen(false);
       onDeleteSuccess();
-    } catch (e) { alert('שגיאה במחיקה'); }
+    } catch (e) { toast.error('שגיאה במחיקה'); }
   };
 
   const changeStatus = async (newStatus) => {

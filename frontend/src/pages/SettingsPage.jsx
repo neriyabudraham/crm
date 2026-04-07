@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import { TemplateEditor } from '../components/settings/TemplateEditor';
+import { useDialog } from '../components/ui/Dialog';
 
 export const SettingsPage = () => {
+  const { toast, confirm, prompt } = useDialog();
   const [activeTab, setActiveTab] = useState('statuses');
   const [statuses, setStatuses] = useState([]);
   const [sources, setSources] = useState([]);
@@ -46,23 +48,26 @@ export const SettingsPage = () => {
     try {
       await api.post('/account/members', newMember);
       setNewMember({ email: '', role: 'member' });
+      toast.success('החבר נוסף בהצלחה');
       loadMembers();
-    } catch (err) { alert(err.response?.data?.error || 'שגיאה'); }
+    } catch (err) { toast.error(err.response?.data?.error || 'שגיאה'); }
   };
 
   const updateMemberRole = async (id, role) => {
     try {
       await api.patch(`/account/members/${id}`, { role });
+      toast.success('התפקיד עודכן');
       loadMembers();
-    } catch (err) { alert(err.response?.data?.error || 'שגיאה'); }
+    } catch (err) { toast.error(err.response?.data?.error || 'שגיאה'); }
   };
 
   const removeMember = async (id, email) => {
-    if (!confirm(`להסיר את ${email} מהחשבון?`)) return;
+    if (!await confirm(`להסיר את ${email} מהחשבון?`, { destructive: true, confirmText: 'הסר' })) return;
     try {
       await api.delete(`/account/members/${id}`);
+      toast.success('החבר הוסר');
       loadMembers();
-    } catch (err) { alert(err.response?.data?.error || 'שגיאה'); }
+    } catch (err) { toast.error(err.response?.data?.error || 'שגיאה'); }
   };
 
   const loadApiKeys = () => api.get('/v1/api-keys').then(r => setApiKeys(r.data || [])).catch(() => {});
@@ -74,7 +79,7 @@ export const SettingsPage = () => {
       setNewlyCreatedKey(r.data);
       setNewApiKeyName('');
       loadApiKeys();
-    } catch (err) { alert(err.response?.data?.error || 'שגיאה'); }
+    } catch (err) { toast.error(err.response?.data?.error || 'שגיאה'); }
   };
 
   const toggleApiKey = async (id, is_active) => {
@@ -83,8 +88,9 @@ export const SettingsPage = () => {
   };
 
   const deleteApiKey = async (id, name) => {
-    if (!confirm(`למחוק את המפתח "${name}"? כל אינטגרציה שמשתמשת בו תפסיק לעבוד.`)) return;
+    if (!await confirm(`למחוק את המפתח "${name}"? כל אינטגרציה שמשתמשת בו תפסיק לעבוד.`, { destructive: true, confirmText: 'מחק' })) return;
     await api.delete(`/v1/api-keys/${id}`);
+    toast.success('המפתח נמחק');
     loadApiKeys();
   };
 
@@ -194,14 +200,14 @@ export const SettingsPage = () => {
     await api.post('/admin/settings/default_fields', { values: updated });
   };
 
-  // --- משתמשים ---
+  // --- משתמשים (legacy — לא בשימוש מאז המעבר ל-account_members) ---
   const addUser = async () => {
     if (!newUser.username.trim() || !newUser.password.trim()) return;
     try {
       await api.post('/auth/users', newUser);
       setNewUser({ username: '', password: '', role: 'user' });
       loadAll();
-    } catch (err) { alert(err.response?.data?.error || 'שגיאה'); }
+    } catch (err) { toast.error(err.response?.data?.error || 'שגיאה'); }
   };
 
   const saveUser = async () => {
@@ -210,18 +216,18 @@ export const SettingsPage = () => {
       await api.patch(`/auth/users/${editingUser.id}`, editingUser);
       setEditingUser(null);
       loadAll();
-    } catch (err) { alert(err.response?.data?.error || 'שגיאה'); }
+    } catch (err) { toast.error(err.response?.data?.error || 'שגיאה'); }
   };
 
   const deleteUser = async (id) => {
-    if (!confirm('למחוק את המשתמש?')) return;
+    if (!await confirm('למחוק את המשתמש?', { destructive: true, confirmText: 'מחק' })) return;
     await api.delete(`/auth/users/${id}`);
     loadAll();
   };
 
   // --- תבניות חתימה ---
   const uploadTemplate = async () => {
-    if (!newTemplate.name.trim() || !templateFile) return alert('נא להזין שם ולהעלות קובץ PDF');
+    if (!newTemplate.name.trim() || !templateFile) { toast.warning('נא להזין שם ולהעלות קובץ PDF'); return; }
     setUploading(true);
     try {
       const formData = new FormData();
@@ -232,20 +238,22 @@ export const SettingsPage = () => {
       await api.post('/admin/templates/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       setNewTemplate({ name: '' });
       setTemplateFile(null);
+      toast.success('התבנית הועלתה');
       loadAll();
-    } catch (err) { alert('שגיאה בהעלאה'); }
+    } catch (err) { toast.error('שגיאה בהעלאה'); }
     finally { setUploading(false); }
   };
 
   const deleteTemplate = async (id) => {
-    if (!confirm('למחוק את התבנית?')) return;
+    if (!await confirm('למחוק את התבנית?', { destructive: true, confirmText: 'מחק' })) return;
     await api.delete(`/admin/templates/${id}`);
+    toast.success('התבנית נמחקה');
     loadAll();
   };
 
   // --- שאלונים ---
   const createQuestionnaire = async () => {
-    const name = prompt('שם השאלון:');
+    const name = await prompt('שם השאלון:', { title: 'יצירת שאלון', placeholder: 'לדוג: שאלון פרטי כלה', confirmText: 'צור' });
     if (!name) return;
     const res = await api.post('/questionnaires', { name, entity_type: 'bride', fields: [], field_mapping: {} });
     setEditingQuestionnaire(res.data);
@@ -290,8 +298,9 @@ export const SettingsPage = () => {
   };
 
   const deleteQuestionnaire = async (id) => {
-    if (!confirm('למחוק את השאלון?')) return;
+    if (!await confirm('למחוק את השאלון?', { destructive: true, confirmText: 'מחק' })) return;
     await api.delete(`/questionnaires/${id}`);
+    toast.success('השאלון נמחק');
     loadAll();
   };
 
@@ -820,7 +829,7 @@ export const SettingsPage = () => {
               </div>
               <code className="block bg-white p-4 rounded-xl text-xs break-all font-mono select-all">{newlyCreatedKey.key}</code>
               <button
-                onClick={() => { navigator.clipboard.writeText(newlyCreatedKey.key); alert('הועתק'); }}
+                onClick={() => { navigator.clipboard.writeText(newlyCreatedKey.key); toast.success('המפתח הועתק'); }}
                 className="mt-3 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl font-bold text-sm"
               >העתק</button>
             </div>
