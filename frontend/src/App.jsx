@@ -36,6 +36,34 @@ function App() {
   const [selectedClientId, setSelectedClientId] = useState(null);
   const [transitioning, setTransitioning] = useState(false);
 
+  // טיפול ב-Google OAuth callback (החזרה מ-Google עם ?code=...)
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get('code');
+    const isGoogleCallback = window.location.pathname === '/auth/google/callback';
+    if (!code || !isGoogleCallback) return;
+
+    api.post('/account/google/callback', { code })
+      .then(res => {
+        localStorage.setItem('accessToken', res.data.accessToken);
+        localStorage.setItem('refreshToken', res.data.refreshToken);
+        // נקה את ה-URL מהcode כדי שלא יישלח שוב
+        window.history.replaceState({}, '', '/');
+        setUser(res.data.user);
+        setAccounts(res.data.accounts);
+        const current = res.data.accounts.find(a => a.id === res.data.currentAccountId) || res.data.accounts[0];
+        setCurrentAccount(current);
+        localStorage.setItem('user', JSON.stringify(res.data.user));
+        localStorage.setItem('accounts', JSON.stringify(res.data.accounts));
+        localStorage.setItem('currentAccount', JSON.stringify(current));
+      })
+      .catch(err => {
+        alert('שגיאה באימות Google: ' + (err.response?.data?.error || err.message));
+        window.history.replaceState({}, '', '/');
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // בדיקת token קיים בעלייה — מסנכרן עם השרת אם יש token
   useEffect(() => {
     const token = localStorage.getItem('accessToken');

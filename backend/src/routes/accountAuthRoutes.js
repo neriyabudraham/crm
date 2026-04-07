@@ -119,17 +119,53 @@ router.post('/login', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Google OAuth
-router.post('/google', async (req, res) => {
-    const { credential } = req.body;
+// Google OAuth — full-window redirect flow
+const GOOGLE_REDIRECT_URI = `${FRONTEND_URL}/auth/google/callback`;
+
+// Step 1: frontend asks for the auth URL, then redirects the whole window to it
+router.get('/google/url', (req, res) => {
+    if (!process.env.GOOGLE_CLIENT_ID) return res.status(500).json({ error: 'Google OAuth לא מוגדר' });
+    const params = new URLSearchParams({
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        redirect_uri: GOOGLE_REDIRECT_URI,
+        response_type: 'code',
+        scope: 'openid email profile',
+        access_type: 'online',
+        prompt: 'select_account',
+    });
+    res.json({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` });
+});
+
+// Step 2: Google redirects back with ?code=... — frontend POSTs that here
+router.post('/google/callback', async (req, res) => {
+    const { code } = req.body;
+    if (!code) return res.status(400).json({ error: 'code חסר' });
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+        return res.status(500).json({ error: 'Google OAuth לא מוגדר בשרת' });
+    }
     try {
         const { OAuth2Client } = require('google-auth-library');
-        const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-        const ticket = await client.verifyIdToken({ idToken: credential, audience: process.env.GOOGLE_CLIENT_ID });
+        const client = new OAuth2Client(
+            process.env.GOOGLE_CLIENT_ID,
+            process.env.GOOGLE_CLIENT_SECRET,
+            GOOGLE_REDIRECT_URI
+        );
+        // Exchange code → tokens
+        const { tokens } = await client.getToken(code);
+        client.setCredentials(tokens);
+
+        // Verify and read the ID token payload
+        const ticket = await client.verifyIdToken({
+            idToken: tokens.id_token,
+            audience: process.env.GOOGLE_CLIENT_ID,
+        });
         const payload = ticket.getPayload();
         const lowerEmail = payload.email.toLowerCase();
 
-        let userAccount = (await db.query('SELECT * FROM accounts WHERE google_id = $1 OR email = $2', [payload.sub, lowerEmail])).rows[0];
+        let userAccount = (await db.query(
+            'SELECT * FROM accounts WHERE google_id = $1 OR email = $2',
+            [payload.sub, lowerEmail]
+        )).rows[0];
 
         if (!userAccount) {
             const result = await db.query(
@@ -141,12 +177,22 @@ router.post('/google', async (req, res) => {
                 "INSERT INTO account_members (account_id, user_email, role) VALUES ($1, $2, 'owner')",
                 [userAccount.id, lowerEmail]
             );
-            await db.query("INSERT INTO system_settings (key, values, account_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
-                ['client_statuses', JSON.stringify([{name:'חדש',color:'#3B82F6'},{name:'בטיפול',color:'#F59E0B'},{name:'סגר עסקה',color:'#10B981'}]), userAccount.id]);
-            await db.query("INSERT INTO system_settings (key, values, account_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
-                ['client_sources', JSON.stringify(['אינסטגרם','פייסבוק','גוגל','המלצה','אתר']), userAccount.id]);
+            await db.query(
+                "INSERT INTO system_settings (key, values, account_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+                ['client_statuses', JSON.stringify([{name:'חדש',color:'#3B82F6'},{name:'בטיפול',color:'#F59E0B'},{name:'סגר עסקה',color:'#10B981'}]), userAccount.id]
+            );
+            await db.query(
+                "INSERT INTO system_settings (key, values, account_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+                ['client_sources', JSON.stringify(['אינסטגרם','פייסבוק','גוגל','המלצה','אתר']), userAccount.id]
+            );
+            // welcome
+            sendMail(lowerEmail, 'ברוך הבא ל-Botomat CRM', mailTemplates.welcomeEmail(payload.name))
+                .catch(err => console.error('[mail] welcome failed:', err.message));
         } else if (!userAccount.google_id) {
-            await db.query('UPDATE accounts SET google_id = $1, avatar_url = COALESCE(avatar_url, $2) WHERE id = $3', [payload.sub, payload.picture, userAccount.id]);
+            await db.query(
+                'UPDATE accounts SET google_id = $1, avatar_url = COALESCE(avatar_url, $2) WHERE id = $3',
+                [payload.sub, payload.picture, userAccount.id]
+            );
         }
 
         const accounts = await loadAccessibleAccounts(lowerEmail);
@@ -159,7 +205,10 @@ router.post('/google', async (req, res) => {
             currentAccountId: current.id,
             accessToken, refreshToken
         });
-    } catch (err) { res.status(500).json({ error: 'שגיאה באימות Google: ' + err.message }); }
+    } catch (err) {
+        console.error('[google oauth callback]', err);
+        res.status(500).json({ error: 'שגיאה באימות Google: ' + err.message });
+    }
 });
 
 // החלפת חשבון פעיל
