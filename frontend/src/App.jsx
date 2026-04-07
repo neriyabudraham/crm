@@ -13,45 +13,48 @@ import { AuthPage } from './pages/AuthPage';
 import { SuperAdminPage } from './pages/SuperAdminPage';
 import './index.css';
 
+// Helpers לטעינה מ-localStorage עם ניקוי אוטומטי של ערכים שבורים מסשנים ישנים
+const safeParse = (key, fallback) => {
+  try {
+    const v = JSON.parse(localStorage.getItem(key));
+    return v == null ? fallback : v;
+  } catch { return fallback; }
+};
+
 function App() {
-  // דפים ציבוריים
-  const signMatch = window.location.pathname.match(/^\/sign\/(.+)$/);
-  if (signMatch) return <SigningPage token={signMatch[1]} />;
-
-  const questionnaireMatch = window.location.pathname.match(/^\/questionnaire\/(.+)$/);
-  if (questionnaireMatch) return <QuestionnairePublicPage token={questionnaireMatch[1]} />;
-
-  if (window.location.pathname.startsWith('/admin')) return <SuperAdminPage />;
-
-  // מצב משתמש מחובר + רשימת חשבונות נגישים
-  const [user, setUser] = useState(() => { try { return JSON.parse(localStorage.getItem('user')); } catch { return null; } });
-  const [accounts, setAccounts] = useState(() => { try { return JSON.parse(localStorage.getItem('accounts')) || []; } catch { return []; } });
-  const [currentAccount, setCurrentAccount] = useState(() => { try { return JSON.parse(localStorage.getItem('currentAccount')); } catch { return null; } });
+  // ⚠️ כל ה-hooks חייבים להיות לפני כל early return — Rules of Hooks
+  // (אפילו אם הnavigation יפתור public pages, ה-hooks חייבים לרוץ קודם)
+  const [user, setUser] = useState(() => safeParse('user', null));
+  const [accounts, setAccounts] = useState(() => {
+    const v = safeParse('accounts', []);
+    return Array.isArray(v) ? v : [];
+  });
+  const [currentAccount, setCurrentAccount] = useState(() => safeParse('currentAccount', null));
   const [authMode, setAuthMode] = useState(null);
   const [activeTab, setActiveTab] = useState('brides');
   const [view, setView] = useState('list');
   const [selectedClientId, setSelectedClientId] = useState(null);
   const [transitioning, setTransitioning] = useState(false);
 
-  // בדיקת token קיים בעלייה
+  // בדיקת token קיים בעלייה — מסנכרן עם השרת אם יש token
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
-    if (token && !user) {
-      api.get('/account/me').then(res => {
-        setUser(res.data.user);
-        setAccounts(res.data.accounts);
-        setCurrentAccount(res.data.currentAccount);
-        localStorage.setItem('user', JSON.stringify(res.data.user));
-        localStorage.setItem('accounts', JSON.stringify(res.data.accounts));
-        localStorage.setItem('currentAccount', JSON.stringify(res.data.currentAccount));
-      }).catch(() => {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        localStorage.removeItem('user');
-        localStorage.removeItem('accounts');
-        localStorage.removeItem('currentAccount');
-      });
-    }
+    if (!token) return;
+    api.get('/account/me').then(res => {
+      setUser(res.data.user);
+      setAccounts(res.data.accounts);
+      setCurrentAccount(res.data.currentAccount);
+      localStorage.setItem('user', JSON.stringify(res.data.user));
+      localStorage.setItem('accounts', JSON.stringify(res.data.accounts));
+      localStorage.setItem('currentAccount', JSON.stringify(res.data.currentAccount));
+    }).catch(() => {
+      // token פג תוקף או לא תקין (למשל מsession ישן) — נקה הכל
+      ['accessToken','refreshToken','user','accounts','currentAccount','account','token'].forEach(k => localStorage.removeItem(k));
+      setUser(null);
+      setAccounts([]);
+      setCurrentAccount(null);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleLoginSuccess = (data) => {
@@ -95,6 +98,14 @@ function App() {
     setTransitioning(true);
     setTimeout(() => { setView('list'); setTransitioning(false); }, 150);
   };
+
+  // --- דפים ציבוריים (אחרי ה-hooks כדי לא להפר Rules of Hooks) ---
+  const path = window.location.pathname;
+  const signMatch = path.match(/^\/sign\/(.+)$/);
+  if (signMatch) return <SigningPage token={signMatch[1]} />;
+  const questionnaireMatch = path.match(/^\/questionnaire\/(.+)$/);
+  if (questionnaireMatch) return <QuestionnairePublicPage token={questionnaireMatch[1]} />;
+  if (path.startsWith('/admin')) return <SuperAdminPage />;
 
   // --- אין משתמש מחובר: Landing / Auth ---
   if (!user || !currentAccount) {
