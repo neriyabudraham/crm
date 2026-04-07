@@ -18,14 +18,13 @@ export const AuthPage = ({ mode: initialMode, onSuccess, onBack }) => {
         const res = await api.post('/account/login', { email: form.email, password: form.password });
         localStorage.setItem('accessToken', res.data.accessToken);
         localStorage.setItem('refreshToken', res.data.refreshToken);
-        localStorage.setItem('account', JSON.stringify(res.data.account));
-        onSuccess(res.data.account);
+        onSuccess(res.data);
       } else if (mode === 'signup') {
         const res = await api.post('/account/signup', { name: form.name, email: form.email, password: form.password });
         localStorage.setItem('accessToken', res.data.accessToken);
         localStorage.setItem('refreshToken', res.data.refreshToken);
-        localStorage.setItem('account', JSON.stringify(res.data.account));
-        onSuccess(res.data.account);
+        // signup returns {account, accounts, currentAccountId} — wrap as user too
+        onSuccess({ user: res.data.account, accounts: res.data.accounts, currentAccountId: res.data.currentAccountId });
       } else if (mode === 'forgot') {
         await api.post('/account/forgot-password', { email: form.email });
         setResetSent(true);
@@ -44,8 +43,7 @@ export const AuthPage = ({ mode: initialMode, onSuccess, onBack }) => {
       const res = await api.post('/account/google', { credential: response.credential });
       localStorage.setItem('accessToken', res.data.accessToken);
       localStorage.setItem('refreshToken', res.data.refreshToken);
-      localStorage.setItem('account', JSON.stringify(res.data.account));
-      onSuccess(res.data.account);
+      onSuccess(res.data);
     } catch (err) {
       setError(err.response?.data?.error || 'שגיאה באימות Google');
     } finally { setLoading(false); }

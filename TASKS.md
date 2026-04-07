@@ -8,12 +8,17 @@
 - [x] 1.3 הגדרת סכום עסקה דיפולטיבי לכל חלק
 - [x] 1.4 שיוך שאלונים לחלקים (questionnaires.entity_type)
 - [x] 1.5 שיוך תבניות חתימה לחלקים (pdf_templates.entity_type)
-- [ ] 1.6 שדות ברירת מחדל בהגדרות ראשיות (הצג/הסתר/חובה) — SystemSettingsModal עדיין בסיסי
+- [x] 1.6 שדות ברירת מחדל בהגדרות ראשיות (הצג/הסתר/חובה) — קיים בטאב `default_fields` ב-SettingsPage
 
 ## שלב 2: מערכת חשבונות (Multi-tenant)
 - [x] 2.1 DB: טבלת accounts
 - [x] 2.2 DB: account_id בכל הטבלאות הרלוונטיות (כולל statuses שהיתה חסרה)
-- [ ] 2.3 DB: טבלת account_users — דחוי, כרגע users.account_id מספיק
+- [x] 2.3 DB: טבלת `account_members` — חיבור many-to-many בין emails לחשבונות, owner/admin/member roles. מאפשר למספר אימיילים גישה לאותו חשבון, ו-multi-tenancy אמיתי.
+- [x] 2.14 ביטול מסך בחירת משתמש פנימי — לוגין ישיר ל-dashboard
+- [x] 2.15 Account switcher בHeader — דרופדאון לעבור בין חשבונות נגישים בקליק
+- [x] 2.16 Members tab בהגדרות — הוספה/הסרה/שינוי תפקיד של חברים
+- [x] 2.17 POST /api/account/switch — JWT חדש עם accountId אחר
+- [x] 2.18 accountMiddleware מוודא membership ב-account_members בכל בקשה (cache 5 שניות)
 - [x] 2.4 Middleware: tenant isolation מופעל על clients/admin/courses/templates ועל management endpoints של signing/questionnaires
 - [x] 2.5 מיגרציית נתונים קיימים — backfill ל-account_id=1 (system_settings, statuses, signing_sessions, signed_documents)
 - [x] 2.6 Backend: auth routes — signup, login, forgot-password, reset-password
@@ -26,7 +31,7 @@
 - [x] 2.13 תיקון system_settings PK → (key, account_id), users.username UNIQUE → (username, account_id)
 
 ## שלב 3: Google OAuth
-- [ ] 3.1 Backend: וידוא ש-google-auth-library קיים ב-backend/package.json
+- [x] 3.1 Backend: google-auth-library קיים ב-backend/package.json (^10.6.2)
 - [x] 3.2 Backend: POST /api/account/google
 - [x] 3.3 Frontend: כפתור "התחבר עם Google"
 - [ ] 3.4 הגדרת Google Cloud Console — OAuth client ID + GOOGLE_CLIENT_ID ב-.env

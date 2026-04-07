@@ -34,6 +34,37 @@ export const SettingsPage = () => {
   const [newApiKeyName, setNewApiKeyName] = useState('');
   const [newlyCreatedKey, setNewlyCreatedKey] = useState(null);
 
+  // Members state
+  const [members, setMembers] = useState([]);
+  const [newMember, setNewMember] = useState({ email: '', role: 'member' });
+  const currentUserEmail = (() => { try { return JSON.parse(localStorage.getItem('user'))?.email?.toLowerCase(); } catch { return null; } })();
+
+  const loadMembers = () => api.get('/account/members').then(r => setMembers(r.data || [])).catch(() => {});
+
+  const addMember = async () => {
+    if (!newMember.email.trim()) return;
+    try {
+      await api.post('/account/members', newMember);
+      setNewMember({ email: '', role: 'member' });
+      loadMembers();
+    } catch (err) { alert(err.response?.data?.error || 'שגיאה'); }
+  };
+
+  const updateMemberRole = async (id, role) => {
+    try {
+      await api.patch(`/account/members/${id}`, { role });
+      loadMembers();
+    } catch (err) { alert(err.response?.data?.error || 'שגיאה'); }
+  };
+
+  const removeMember = async (id, email) => {
+    if (!confirm(`להסיר את ${email} מהחשבון?`)) return;
+    try {
+      await api.delete(`/account/members/${id}`);
+      loadMembers();
+    } catch (err) { alert(err.response?.data?.error || 'שגיאה'); }
+  };
+
   const loadApiKeys = () => api.get('/v1/api-keys').then(r => setApiKeys(r.data || [])).catch(() => {});
 
   const createApiKey = async () => {
@@ -57,7 +88,10 @@ export const SettingsPage = () => {
     loadApiKeys();
   };
 
-  useEffect(() => { if (activeTab === 'api_keys') loadApiKeys(); }, [activeTab]);
+  useEffect(() => {
+    if (activeTab === 'api_keys') loadApiKeys();
+    if (activeTab === 'members') loadMembers();
+  }, [activeTab]);
   const [editingQuestionnaire, setEditingQuestionnaire] = useState(null);
   const [customFieldsList, setCustomFieldsList] = useState([]);
 
@@ -280,7 +314,7 @@ export const SettingsPage = () => {
     { id: 'sources', label: 'מקורות הגעה', icon: '📍' },
     { id: 'default_fields', label: 'שדות ברירת מחדל', icon: '📋' },
     { id: 'fields', label: 'שדות מותאמים', icon: '📝' },
-    { id: 'users', label: 'משתמשים והרשאות', icon: '👥' },
+    { id: 'members', label: 'חברי חשבון', icon: '👥' },
     { id: 'payments_settings', label: 'אמצעי תשלום', icon: '💳' },
     { id: 'templates', label: 'תבניות חתימה', icon: '✍️' },
     { id: 'questionnaires', label: 'שאלונים', icon: '📋' },
@@ -494,76 +528,71 @@ export const SettingsPage = () => {
         </div>
       )}
 
-      {/* משתמשים */}
-      {activeTab === 'users' && (
+      {/* חברי חשבון */}
+      {activeTab === 'members' && (
         <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm p-10">
-          <h3 className="text-2xl font-black mb-2">ניהול משתמשים</h3>
-          <p className="text-gray-400 text-sm mb-8">הוספה, עריכה ומחיקה של משתמשי המערכת.</p>
+          <h3 className="text-2xl font-black mb-2">חברי חשבון</h3>
+          <p className="text-gray-400 text-sm mb-8">הזמן אנשים בארגון שלך לגשת לחשבון הזה. כל אחד יוכל להתחבר עם המייל שלו ולעבור בקלות בין החשבונות שיש לו גישה אליהם. אם המוזמן עדיין לא רשום, הוא יקבל גישה אוטומטית בעת הרשמה.</p>
+
           <div className="bg-gray-50 p-6 rounded-3xl mb-8">
-            <h4 className="font-black text-gray-600 text-sm mb-4">הוסף משתמש חדש</h4>
-            <div className="grid grid-cols-3 gap-4 mb-4">
-              <input placeholder="שם משתמש" className="p-4 rounded-xl outline-none font-bold" value={newUser.username} onChange={e => setNewUser({ ...newUser, username: e.target.value })} />
-              <input placeholder="סיסמה" type="password" className="p-4 rounded-xl outline-none font-bold" value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })} />
-              <select className="p-4 rounded-xl outline-none font-bold" value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}>
+            <h4 className="font-black text-gray-600 text-sm mb-4">הוסף חבר חדש</h4>
+            <div className="flex gap-3">
+              <input
+                type="email"
+                placeholder="כתובת מייל"
+                className="flex-1 p-4 rounded-xl outline-none font-bold"
+                value={newMember.email}
+                onChange={e => setNewMember({ ...newMember, email: e.target.value })}
+                onKeyDown={e => e.key === 'Enter' && addMember()}
+              />
+              <select
+                className="p-4 rounded-xl outline-none font-bold bg-white"
+                value={newMember.role}
+                onChange={e => setNewMember({ ...newMember, role: e.target.value })}
+              >
+                <option value="member">חבר</option>
                 <option value="admin">מנהל</option>
-                <option value="user">משתמש רגיל</option>
               </select>
+              <button onClick={addMember} className="bg-gray-900 text-white px-6 rounded-xl font-black">+ הוסף</button>
             </div>
-            <button onClick={addUser} className="w-full bg-gray-900 text-white p-4 rounded-xl font-black">הוסף משתמש</button>
           </div>
+
           <div className="space-y-3">
-            {users.map(u => (
-              <div key={u.id} className="p-5 bg-gray-50 rounded-2xl">
-                {editingUser?.id === u.id ? (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-3 gap-4">
-                      <input className="p-3 rounded-xl outline-none font-bold bg-white" value={editingUser.username} onChange={e => setEditingUser({ ...editingUser, username: e.target.value })} />
-                      <input placeholder="סיסמה חדשה (ריק = ללא שינוי)" type="password" className="p-3 rounded-xl outline-none font-bold bg-white" value={editingUser.password || ''} onChange={e => setEditingUser({ ...editingUser, password: e.target.value })} />
-                      <select className="p-3 rounded-xl outline-none font-bold bg-white" value={editingUser.role} onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}>
-                        <option value="admin">מנהל</option>
-                        <option value="user">משתמש רגיל</option>
-                      </select>
-                    </div>
-                    <div className="bg-white p-4 rounded-xl">
-                      <h5 className="font-bold text-sm text-gray-500 mb-3">הרשאות עמודים</h5>
-                      <div className="flex flex-wrap gap-3">
-                        {['brides', 'courses', 'payments', 'settings'].map(page => {
-                          const perms = editingUser.permissions || {};
-                          const pages = perms.pages || ['brides', 'courses', 'payments', 'settings'];
-                          return (
-                            <label key={page} className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-lg cursor-pointer">
-                              <input type="checkbox" className="w-4 h-4 accent-accent" checked={pages.includes(page)} onChange={() => {
-                                const newPages = pages.includes(page) ? pages.filter(p => p !== page) : [...pages, page];
-                                setEditingUser({ ...editingUser, permissions: { ...perms, pages: newPages } });
-                              }} />
-                              <span className="font-bold text-sm">{{ brides: 'כלות', courses: 'קורסים', payments: 'גבייה', settings: 'הגדרות' }[page]}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    <div className="flex gap-3">
-                      <button onClick={saveUser} className="bg-green-500 text-white px-6 py-2 rounded-xl font-bold">שמור</button>
-                      <button onClick={() => setEditingUser(null)} className="text-gray-400 font-bold">ביטול</button>
-                    </div>
+            {members.map(m => (
+              <div key={m.id} className="p-5 bg-gray-50 rounded-2xl flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-11 h-11 bg-gray-900 text-white rounded-xl flex items-center justify-center font-black">
+                    {m.avatar_url ? <img src={m.avatar_url} alt="" className="w-full h-full rounded-xl object-cover" /> : (m.user_email[0] || '?').toUpperCase()}
                   </div>
-                ) : (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-gray-900 text-white rounded-full flex items-center justify-center font-black">{u.username.charAt(0).toUpperCase()}</div>
-                      <div>
-                        <span className="font-bold text-gray-800">{u.username}</span>
-                        <span className={`mr-3 text-[10px] px-2 py-0.5 rounded-full font-bold ${u.role === 'admin' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-200 text-gray-500'}`}>{u.role === 'admin' ? 'מנהל' : 'משתמש'}</span>
-                      </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-gray-900">{m.user_name || m.user_email}</span>
+                      {m.user_email.toLowerCase() === currentUserEmail && <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">אתה</span>}
+                      {!m.user_name && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">ממתין להרשמה</span>}
                     </div>
-                    <div className="flex items-center gap-3">
-                      <button onClick={() => setEditingUser({ ...u, password: '' })} className="text-accent font-bold text-sm hover:underline">ערוך</button>
-                      <button onClick={() => deleteUser(u.id)} className="text-red-400 hover:text-red-600 font-bold text-sm">מחק</button>
-                    </div>
+                    <div className="text-xs text-gray-400">{m.user_email}</div>
                   </div>
-                )}
+                </div>
+                <div className="flex items-center gap-3">
+                  {m.role === 'owner' ? (
+                    <span className="text-xs bg-yellow-100 text-yellow-800 px-3 py-1.5 rounded-lg font-bold">👑 בעלים</span>
+                  ) : (
+                    <select
+                      value={m.role}
+                      onChange={e => updateMemberRole(m.id, e.target.value)}
+                      className="text-xs bg-white px-3 py-1.5 rounded-lg font-bold border border-gray-200"
+                    >
+                      <option value="member">חבר</option>
+                      <option value="admin">מנהל</option>
+                    </select>
+                  )}
+                  {m.role !== 'owner' && (
+                    <button onClick={() => removeMember(m.id, m.user_email)} className="text-red-400 hover:text-red-600 font-bold text-sm">הסר</button>
+                  )}
+                </div>
               </div>
             ))}
+            {members.length === 0 && <p className="text-gray-400 text-center py-8 font-bold">אין חברים נוספים</p>}
           </div>
         </div>
       )}
