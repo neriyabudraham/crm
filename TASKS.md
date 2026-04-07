@@ -34,11 +34,11 @@
 
 ## שלב 4: ממשק ניהול מערכת (Super Admin)
 - [x] 4.1 DB: טבלת admin_users
-- [ ] 4.2 Backend: admin routes — ניהול חשבונות, סטטיסטיקות
-- [ ] 4.3 Frontend: ממשק admin נפרד
-- [ ] 4.4 Admin login: office@neriyabudraham.co.il
-- [ ] 4.5 אפשרות "התחבר כמשתמש" (viewingAs)
-- [ ] 4.6 סטטיסטיקות מערכת
+- [x] 4.2 Backend: superAdminRoutes — login, /me, /stats, /accounts (CRUD), /accounts/:id/login-as
+- [x] 4.3 Frontend: SuperAdminPage נפרד תחת `/admin` (login + dashboard + accounts table)
+- [x] 4.4 Admin login: office@neriyabudraham.co.il (סיסמה זמנית `Admin1234!` — **חובה לשנות בהתחברות הראשונה**)
+- [x] 4.5 אפשרות "התחבר כמשתמש" — הכפתור יוצר accessToken עם flag `impersonatedBy` ומפנה ל-`/`
+- [x] 4.6 סטטיסטיקות מערכת — accounts/clients/payments/signed_docs/questionnaires/plans/new_30d
 
 ## שלב 5: API מלא + Swagger + API Keys
 - [ ] 5.1 Backend: /api/v1/ router מרכזי

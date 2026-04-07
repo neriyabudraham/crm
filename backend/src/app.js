@@ -10,6 +10,7 @@ const adminRoutes = require('./routes/adminRoutes');
 const courseRoutes = require('./routes/courseRoutes');
 const signingRoutes = require('./routes/signingRoutes');
 const questionnaireRoutes = require('./routes/questionnaireRoutes');
+const superAdminRoutes = require('./routes/superAdminRoutes');
 const upload = require('./middlewares/uploadMiddleware');
 const { accountAuth } = require('./middlewares/accountMiddleware');
 
@@ -22,6 +23,9 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // Public auth/account endpoints (no JWT required)
 app.use('/api/account', accountAuthRoutes);
 app.use('/api/auth', authRoutes);
+
+// Super Admin (separate auth namespace, mostly self-protected by superAdminAuth)
+app.use('/api/superadmin', superAdminRoutes);
 
 // Public token-based endpoints — must come BEFORE protected routes since
 // signingRoutes/questionnaireRoutes contain BOTH public token endpoints

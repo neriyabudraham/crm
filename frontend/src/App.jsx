@@ -12,6 +12,7 @@ import { SigningPage } from './pages/SigningPage';
 import { QuestionnairePublicPage } from './pages/QuestionnairePublicPage';
 import { LandingPage } from './pages/LandingPage';
 import { AuthPage } from './pages/AuthPage';
+import { SuperAdminPage } from './pages/SuperAdminPage';
 import './index.css';
 
 function App() {
@@ -21,6 +22,8 @@ function App() {
 
   const questionnaireMatch = window.location.pathname.match(/^\/questionnaire\/(.+)$/);
   if (questionnaireMatch) return <QuestionnairePublicPage token={questionnaireMatch[1]} />;
+
+  if (window.location.pathname.startsWith('/admin')) return <SuperAdminPage />;
 
   // מצב חשבון
   const [account, setAccount] = useState(() => {
