@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:15
+    container_name: crm_postgres
+    restart: unless-stopped
+    ports:
+      - "5445:5432"
+    environment:
+      POSTGRES_USER: crm_admin
+      POSTGRES_PASSWORD: Nnh4229
+      POSTGRES_DB: crm_prod_db
+    volumes:
+      - crm_pgdata:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    container_name: crm_backend
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      - db
+
+  frontend:
+    build: ./frontend
+    container_name: crm_frontend
+    restart: unless-stopped
+    network_mode: host
+    depends_on:
+      - backend
+
+volumes:
+  crm_pgdata:

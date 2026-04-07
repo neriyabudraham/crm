@@ -1,0 +1,178 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import api from '../services/api';
+import { AddClientModal } from '../components/clients/AddClientModal';
+import { EntitySettingsModal } from '../components/settings/EntitySettingsModal';
+
+export const EntityPage = ({ entityType, title, onSelectClient }) => {
+  const [clients, setClients] = useState([]);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sortConfig, setSortConfig] = useState({ key: 'created_at', direction: 'desc' });
+  const [statusColors, setStatusColors] = useState({});
+  const [statusList, setStatusList] = useState([]);
+  const [customFields, setCustomFields] = useState([]);
+
+  // עמודות בסיס
+  const baseColumns = [
+    { id: 'full_name', label: 'שם', system: true },
+    { id: 'phone', label: 'טלפון', system: true },
+    { id: 'email', label: 'אימייל', system: true },
+    { id: 'status_name', label: 'סטטוס', system: true },
+    { id: 'source', label: 'מקור', system: true },
+    { id: 'created_at', label: 'תאריך', system: true }
+  ];
+
+  // עמודות מותאמות ספציפיות + גלובליות
+  const allColumns = useMemo(() => {
+    const customCols = customFields.map(f => ({
+      id: `cf_${f.id}`, label: f.field_name, custom: true, fieldId: f.id
+    }));
+    return [...baseColumns, ...customCols];
+  }, [customFields]);
+
+  const storageKey = `${entityType}_columns_view`;
+  const [visibleColumns, setVisibleColumns] = useState(() => {
+    const saved = localStorage.getItem(storageKey);
+    return saved ? JSON.parse(saved) : ['full_name', 'phone', 'status_name', 'source'];
+  });
+
+  useEffect(() => {
+    localStorage.setItem(storageKey, JSON.stringify(visibleColumns));
+  }, [visibleColumns, storageKey]);
+
+  const fetchClients = () => api.get(`/clients?entity_type=${entityType}`).then(res => setClients(res.data || []));
+
+  const loadSettings = () => {
+    const statusKey = entityType === 'bride' ? 'client_statuses' : `${entityType}_statuses`;
+    api.get(`/admin/settings/${statusKey}`).then(res => {
+      const data = res.data || [];
+      const map = {}, names = [];
+      data.forEach(s => { if (s.name) { map[s.name] = s.color; names.push(s.name); } else names.push(s); });
+      setStatusColors(map);
+      setStatusList(names);
+    }).catch(() => {});
+
+    // שדות מותאמים: ספציפיים לentity + גלובליים
+    api.get(`/admin/fields?type=${entityType}`).then(res1 => {
+      api.get('/admin/fields?type=global').then(res2 => {
+        setCustomFields([...(res1.data || []), ...(res2.data || [])]);
+      }).catch(() => setCustomFields(res1.data || []));
+    }).catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchClients();
+    loadSettings();
+  }, [entityType]);
+
+  const processedClients = useMemo(() => {
+    let result = clients.filter(c =>
+      (statusFilter === 'all' || c.status_name === statusFilter) &&
+      (c.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || c.phone?.includes(searchTerm))
+    );
+    result.sort((a, b) => {
+      let valA, valB;
+      if (sortConfig.key.startsWith('cf_')) {
+        const fid = sortConfig.key.replace('cf_', '');
+        valA = (a.custom_fields_data || {})[fid] || '';
+        valB = (b.custom_fields_data || {})[fid] || '';
+      } else {
+        valA = a[sortConfig.key] || '';
+        valB = b[sortConfig.key] || '';
+      }
+      if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return result;
+  }, [clients, searchTerm, statusFilter, sortConfig]);
+
+  const getCellValue = (client, colId) => {
+    if (colId.startsWith('cf_')) {
+      const fid = colId.replace('cf_', '');
+      return (client.custom_fields_data || {})[fid] || '';
+    }
+    if (colId === 'created_at') return client.created_at ? new Date(client.created_at).toLocaleDateString('he-IL') : '';
+    return client[colId] || '';
+  };
+
+  return (
+    <div className="animate-in fade-in duration-500 text-right">
+      <div className="flex justify-between items-center mb-10">
+        <div>
+          <h2 className="text-4xl font-black text-gray-900 tracking-tight">{title}</h2>
+          <div className="flex gap-3 mt-4">
+            <input type="text" placeholder="חיפוש לפי שם או טלפון..." className="p-3 bg-white border border-gray-100 rounded-2xl text-sm w-64 outline-none focus:border-accent shadow-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            <select className="p-3 bg-white border border-gray-100 rounded-2xl text-sm outline-none focus:border-accent shadow-sm font-bold" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+              <option value="all">כל הסטטוסים</option>
+              {statusList.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <button onClick={() => setIsSettingsOpen(true)} className="p-4 bg-white border border-gray-100 rounded-2xl hover:border-accent shadow-sm transition-all font-bold">הגדרות</button>
+          <button onClick={() => setIsModalOpen(true)} className="bg-gray-900 text-white px-8 py-4 rounded-2xl font-black shadow-xl hover:scale-105 transition-all">+ ליד חדש</button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-[3rem] border border-gray-100 shadow-sm overflow-hidden">
+        {processedClients.length > 0 ? (
+          <table className="w-full text-right">
+            <thead className="bg-gray-50 border-b border-gray-100 text-gray-400 text-xs font-black tracking-widest uppercase">
+              <tr>
+                {allColumns.filter(c => visibleColumns.includes(c.id)).map(col => (
+                  <th key={col.id} onClick={() => {
+                    let dir = 'asc';
+                    if (sortConfig.key === col.id && sortConfig.direction === 'asc') dir = 'desc';
+                    setSortConfig({ key: col.id, direction: dir });
+                  }} className="px-6 py-5 cursor-pointer hover:text-gray-900 transition-colors">
+                    {col.label} {sortConfig.key === col.id ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {processedClients.map(client => (
+                <tr key={client.id} className="hover:bg-gray-50/50 cursor-pointer transition-colors" onClick={() => onSelectClient(client.id)}>
+                  {allColumns.filter(c => visibleColumns.includes(c.id)).map(col => (
+                    <td key={col.id} className="px-6 py-5">
+                      {col.id === 'status_name' ? (
+                        <span className="px-3 py-1 rounded-full text-[10px] font-black text-white" style={{ backgroundColor: statusColors[client.status_name] || '#9CA3AF' }}>
+                          {client.status_name}
+                        </span>
+                      ) : col.id === 'full_name' ? (
+                        <span className="font-bold text-gray-900">{client.full_name}</span>
+                      ) : (
+                        <span className="text-gray-500 text-sm">{getCellValue(client, col.id)}</span>
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <div className="py-20 text-center">
+            <p className="text-5xl mb-4">📋</p>
+            <p className="text-gray-400 font-bold text-lg mb-2">
+              {searchTerm || statusFilter !== 'all' ? 'לא נמצאו תוצאות' : 'עדיין אין לידים'}
+            </p>
+            <p className="text-gray-300 text-sm">לחץ על "+ ליד חדש"</p>
+          </div>
+        )}
+      </div>
+
+      <EntitySettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => { setIsSettingsOpen(false); loadSettings(); fetchClients(); }}
+        entityType={entityType}
+        allColumns={allColumns}
+        visibleColumns={visibleColumns}
+        setVisibleColumns={setVisibleColumns}
+      />
+      <AddClientModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onRefresh={fetchClients} entityType={entityType} />
+    </div>
+  );
+};

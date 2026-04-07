@@ -1,0 +1,5 @@
+node_modules
+.env.example
+test-api.sh
+test-connection.js
+verify_backend.js
