@@ -3,9 +3,12 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
+const { sendMail } = require('../services/mail/transport.service');
+const mailTemplates = require('../services/mail/templates.service');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'crm_secret_key_2025';
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'crm_refresh_secret_2025';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://crm.botomat.co.il';
 
 // ============ Helpers ============
 
@@ -74,6 +77,11 @@ router.post('/signup', async (req, res) => {
 
         const accounts = await loadAccessibleAccounts(lowerEmail);
         const { accessToken, refreshToken } = await generateTokens(account.id, lowerEmail, account.id);
+
+        // welcome email — non-blocking
+        sendMail(lowerEmail, 'ברוך הבא ל-Botomat CRM', mailTemplates.welcomeEmail(name))
+            .catch(err => console.error('[mail] welcome failed:', err.message));
+
         res.status(201).json({ account, accounts, currentAccountId: account.id, accessToken, refreshToken });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -210,11 +218,22 @@ router.post('/logout', async (req, res) => {
 router.post('/forgot-password', async (req, res) => {
     const { email } = req.body;
     try {
-        const account = (await db.query('SELECT id FROM accounts WHERE email = $1', [email.toLowerCase()])).rows[0];
+        const lowerEmail = email.toLowerCase();
+        const account = (await db.query('SELECT id, name FROM accounts WHERE email = $1', [lowerEmail])).rows[0];
+        // לא חושפים אם המייל קיים או לא — תמיד 200
         if (!account) return res.json({ success: true });
+
         const code = Math.floor(100000 + Math.random() * 900000).toString();
-        await db.query("INSERT INTO verification_tokens (email, token, type, expires_at) VALUES ($1, $2, 'reset', NOW() + INTERVAL '1 hour')", [email.toLowerCase(), code]);
-        console.log(`Password reset code for ${email}: ${code}`);
+        await db.query("INSERT INTO verification_tokens (email, token, type, expires_at) VALUES ($1, $2, 'reset', NOW() + INTERVAL '1 hour')", [lowerEmail, code]);
+
+        const link = `${FRONTEND_URL}/?reset=${encodeURIComponent(lowerEmail)}`;
+        try {
+            await sendMail(lowerEmail, 'איפוס סיסמה ב-Botomat CRM', mailTemplates.passwordResetEmail(code, link));
+        } catch (mailErr) {
+            console.error('[mail] failed to send password reset:', mailErr.message);
+            console.log(`[fallback] Password reset code for ${lowerEmail}: ${code}`);
+        }
+
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -290,8 +309,24 @@ router.post('/members', accountAuth, async (req, res) => {
             'INSERT INTO account_members (account_id, user_email, role, invited_by) VALUES ($1, $2, $3, $4) ON CONFLICT (account_id, user_email) DO UPDATE SET role = $3',
             [req.accountId, lowerEmail, role, req.userAccountId]
         );
-        // אם אין עדיין חשבון לאימייל הזה — החבר יוכל להירשם בעצמו ויקבל את הגישה אוטומטית.
-        res.status(201).json({ success: true, message: 'החבר נוסף. אם אינו רשום, יקבל גישה אוטומטית בעת הרשמה.' });
+
+        // טען פרטי המזמין והחשבון לצורך המייל
+        const inviterRow = (await db.query('SELECT name FROM accounts WHERE id = $1', [req.userAccountId])).rows[0];
+        const accountRow = (await db.query('SELECT name FROM accounts WHERE id = $1', [req.accountId])).rows[0];
+        const isExistingUser = !!(await db.query('SELECT id FROM accounts WHERE LOWER(email) = $1', [lowerEmail])).rows[0];
+
+        sendMail(
+            lowerEmail,
+            `${inviterRow?.name || 'מישהו'} הזמין/ה אותך ל-${accountRow?.name || 'חשבון'} ב-Botomat CRM`,
+            mailTemplates.memberInviteEmail({
+                inviterName: inviterRow?.name || 'משתמש',
+                accountName: accountRow?.name || 'חשבון',
+                role,
+                isExistingUser,
+            })
+        ).catch(err => console.error('[mail] member invite failed:', err.message));
+
+        res.status(201).json({ success: true, message: 'ההזמנה נשלחה במייל. אם המוזמן עוד לא רשום, יקבל גישה אוטומטית בעת הרשמה.' });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
