@@ -13,7 +13,8 @@ import { AuthPage } from './pages/AuthPage';
 import { SuperAdminPage } from './pages/SuperAdminPage';
 import './index.css';
 
-// Helpers לטעינה מ-localStorage עם ניקוי אוטומטי של ערכים שבורים מסשנים ישנים
+// ========== helpers ==========
+
 const safeParse = (key, fallback) => {
   try {
     const v = JSON.parse(localStorage.getItem(key));
@@ -21,22 +22,57 @@ const safeParse = (key, fallback) => {
   } catch { return fallback; }
 };
 
+// Parse window.location.pathname into a route descriptor
+const parsePath = (pathname) => {
+  if (pathname === '/login' || pathname === '/') return { type: 'auth', mode: 'login' };
+  if (pathname === '/signup') return { type: 'auth', mode: 'signup' };
+  if (pathname === '/forgot-password') return { type: 'auth', mode: 'forgot' };
+  if (pathname === '/reset-password') return { type: 'auth', mode: 'reset' };
+  if (pathname === '/landing') return { type: 'landing' };
+
+  if (pathname === '/brides') return { type: 'app', tab: 'brides', view: 'list' };
+  if (pathname === '/courses') return { type: 'app', tab: 'courses', view: 'list' };
+  if (pathname === '/payments') return { type: 'app', tab: 'payments', view: 'list' };
+  if (pathname === '/settings') return { type: 'app', tab: 'settings', view: 'list' };
+
+  let m = pathname.match(/^\/brides\/(\d+)$/);
+  if (m) return { type: 'app', tab: 'brides', view: 'details', clientId: parseInt(m[1], 10) };
+  m = pathname.match(/^\/courses\/(\d+)$/);
+  if (m) return { type: 'app', tab: 'courses', view: 'details', clientId: parseInt(m[1], 10) };
+
+  // Public token-based pages and admin handled by special early returns
+  return { type: 'app', tab: 'brides', view: 'list' };
+};
+
 function App() {
-  // ⚠️ כל ה-hooks חייבים להיות לפני כל early return — Rules of Hooks
-  // (אפילו אם הnavigation יפתור public pages, ה-hooks חייבים לרוץ קודם)
+  // ========== auth + account state ==========
   const [user, setUser] = useState(() => safeParse('user', null));
   const [accounts, setAccounts] = useState(() => {
     const v = safeParse('accounts', []);
     return Array.isArray(v) ? v : [];
   });
   const [currentAccount, setCurrentAccount] = useState(() => safeParse('currentAccount', null));
-  const [authMode, setAuthMode] = useState(null);
-  const [activeTab, setActiveTab] = useState('brides');
-  const [view, setView] = useState('list');
-  const [selectedClientId, setSelectedClientId] = useState(null);
-  const [transitioning, setTransitioning] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
 
-  // טיפול ב-Google OAuth callback (החזרה מ-Google עם ?code=...)
+  // ========== route state ==========
+  const [route, setRoute] = useState(() => parsePath(window.location.pathname));
+
+  const navigate = (path, { replace = false } = {}) => {
+    if (path !== window.location.pathname) {
+      if (replace) window.history.replaceState({}, '', path);
+      else window.history.pushState({}, '', path);
+    }
+    setRoute(parsePath(path));
+  };
+
+  // Browser back/forward
+  useEffect(() => {
+    const onPop = () => setRoute(parsePath(window.location.pathname));
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  // ========== Google OAuth callback ==========
   useEffect(() => {
     const url = new URL(window.location.href);
     const code = url.searchParams.get('code');
@@ -47,8 +83,6 @@ function App() {
       .then(res => {
         localStorage.setItem('accessToken', res.data.accessToken);
         localStorage.setItem('refreshToken', res.data.refreshToken);
-        // נקה את ה-URL מהcode כדי שלא יישלח שוב
-        window.history.replaceState({}, '', '/');
         setUser(res.data.user);
         setAccounts(res.data.accounts);
         const current = res.data.accounts.find(a => a.id === res.data.currentAccountId) || res.data.accounts[0];
@@ -56,18 +90,19 @@ function App() {
         localStorage.setItem('user', JSON.stringify(res.data.user));
         localStorage.setItem('accounts', JSON.stringify(res.data.accounts));
         localStorage.setItem('currentAccount', JSON.stringify(current));
+        navigate('/brides', { replace: true });
       })
       .catch(err => {
         alert('שגיאה באימות Google: ' + (err.response?.data?.error || err.message));
-        window.history.replaceState({}, '', '/');
+        navigate('/login', { replace: true });
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // בדיקת token קיים בעלייה — מסנכרן עם השרת אם יש token
+  // ========== hydrate /me on load ==========
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
-    if (!token) return;
+    if (!token) { setAuthChecked(true); return; }
     api.get('/account/me').then(res => {
       setUser(res.data.user);
       setAccounts(res.data.accounts);
@@ -76,15 +111,30 @@ function App() {
       localStorage.setItem('accounts', JSON.stringify(res.data.accounts));
       localStorage.setItem('currentAccount', JSON.stringify(res.data.currentAccount));
     }).catch(() => {
-      // token פג תוקף או לא תקין (למשל מsession ישן) — נקה הכל
       ['accessToken','refreshToken','user','accounts','currentAccount','account','token'].forEach(k => localStorage.removeItem(k));
       setUser(null);
       setAccounts([]);
       setCurrentAccount(null);
-    });
+    }).finally(() => setAuthChecked(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ========== route guards ==========
+  // Once auth is checked, redirect mismatched routes:
+  // - Logged in user on /login|/signup|/forgot|/reset → /brides
+  // - Logged out user trying /brides|/courses|... → /login
+  useEffect(() => {
+    if (!authChecked) return;
+    const loggedIn = !!(user && currentAccount);
+    if (loggedIn && route.type === 'auth') {
+      navigate('/brides', { replace: true });
+    } else if (!loggedIn && route.type === 'app') {
+      navigate('/login', { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authChecked, user, currentAccount, route.type]);
+
+  // ========== handlers ==========
   const handleLoginSuccess = (data) => {
     setUser(data.user);
     setAccounts(data.accounts);
@@ -93,7 +143,7 @@ function App() {
     localStorage.setItem('user', JSON.stringify(data.user));
     localStorage.setItem('accounts', JSON.stringify(data.accounts));
     localStorage.setItem('currentAccount', JSON.stringify(current));
-    setAuthMode(null);
+    navigate('/brides');
   };
 
   const switchAccount = async (accountId) => {
@@ -105,8 +155,7 @@ function App() {
       const newCurrent = { ...res.data.account, role: res.data.role };
       setCurrentAccount(newCurrent);
       localStorage.setItem('currentAccount', JSON.stringify(newCurrent));
-      setView('list');
-      setActiveTab('brides');
+      navigate('/brides');
     } catch (err) { alert(err.response?.data?.error || 'שגיאה בהחלפת חשבון'); }
   };
 
@@ -115,19 +164,10 @@ function App() {
     setUser(null);
     setAccounts([]);
     setCurrentAccount(null);
-    setView('list');
+    navigate('/login');
   };
 
-  const openClientCard = (id) => {
-    setTransitioning(true);
-    setTimeout(() => { setSelectedClientId(id); setView('details'); setTransitioning(false); }, 150);
-  };
-  const goBackToList = () => {
-    setTransitioning(true);
-    setTimeout(() => { setView('list'); setTransitioning(false); }, 150);
-  };
-
-  // --- דפים ציבוריים (אחרי ה-hooks כדי לא להפר Rules of Hooks) ---
+  // ========== public pages — handled before route guards ==========
   const path = window.location.pathname;
   const signMatch = path.match(/^\/sign\/(.+)$/);
   if (signMatch) return <SigningPage token={signMatch[1]} />;
@@ -135,16 +175,42 @@ function App() {
   if (questionnaireMatch) return <QuestionnairePublicPage token={questionnaireMatch[1]} />;
   if (path.startsWith('/admin')) return <SuperAdminPage />;
 
-  // --- אין משתמש מחובר: Landing / Auth ---
-  if (!user || !currentAccount) {
-    if (authMode) return <AuthPage mode={authMode} onSuccess={handleLoginSuccess} onBack={() => setAuthMode(null)} />;
-    return <LandingPage onLogin={() => setAuthMode('login')} onSignup={() => setAuthMode('signup')} />;
+  // While the initial /me check is in flight, show nothing (avoids flicker)
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-[#fafafa] flex items-center justify-center" dir="rtl">
+        <div className="w-12 h-12 border-4 border-gray-200 border-t-gray-900 rounded-full animate-spin" />
+      </div>
+    );
   }
 
-  // --- Dashboard ---
+  // ========== auth pages ==========
+  if (route.type === 'landing') {
+    return <LandingPage onLogin={() => navigate('/login')} onSignup={() => navigate('/signup')} />;
+  }
+
+  if (route.type === 'auth') {
+    return (
+      <AuthPage
+        mode={route.mode}
+        onSuccess={handleLoginSuccess}
+        onModeChange={(newMode) => {
+          const pathByMode = { login: '/login', signup: '/signup', forgot: '/forgot-password', reset: '/reset-password' };
+          navigate(pathByMode[newMode] || '/login');
+        }}
+        onBack={() => navigate('/landing')}
+      />
+    );
+  }
+
+  // ========== Dashboard ==========
+  const { tab, view, clientId } = route;
   return (
     <div className="min-h-screen bg-[#fafafa] flex" dir="rtl">
-      <Sidebar activeTab={activeTab} setActiveTab={(tab) => { setActiveTab(tab); setView('list'); }} />
+      <Sidebar
+        activeTab={tab}
+        setActiveTab={(newTab) => navigate('/' + newTab)}
+      />
       <div className="flex-1 flex flex-col">
         <Header
           user={user}
@@ -153,19 +219,19 @@ function App() {
           onSwitchAccount={switchAccount}
           onLogout={handleLogout}
         />
-        <main className={`p-10 max-w-7xl mx-auto w-full transition-opacity duration-150 ${transitioning ? 'opacity-0' : 'opacity-100'}`}>
-          {activeTab === 'brides' && (
+        <main className="p-10 max-w-7xl mx-auto w-full">
+          {tab === 'brides' && (
             view === 'list'
-              ? <EntityPage entityType="bride" title="ניהול כלות" onSelectClient={openClientCard} />
-              : <ClientDetailsPage clientId={selectedClientId} onBack={goBackToList} />
+              ? <EntityPage entityType="bride" title="ניהול כלות" onSelectClient={(id) => navigate(`/brides/${id}`)} />
+              : <ClientDetailsPage clientId={clientId} onBack={() => navigate('/brides')} />
           )}
-          {activeTab === 'courses' && (
+          {tab === 'courses' && (
             view === 'list'
-              ? <EntityPage entityType="course" title="קורסים ותלמידות" onSelectClient={openClientCard} />
-              : <ClientDetailsPage clientId={selectedClientId} onBack={goBackToList} />
+              ? <EntityPage entityType="course" title="קורסים ותלמידות" onSelectClient={(id) => navigate(`/courses/${id}`)} />
+              : <ClientDetailsPage clientId={clientId} onBack={() => navigate('/courses')} />
           )}
-          {activeTab === 'payments' && <PaymentsPage />}
-          {activeTab === 'settings' && <SettingsPage />}
+          {tab === 'payments' && <PaymentsPage />}
+          {tab === 'settings' && <SettingsPage />}
         </main>
       </div>
     </div>

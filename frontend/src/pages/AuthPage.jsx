@@ -1,13 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 
-export const AuthPage = ({ mode: initialMode, onSuccess, onBack }) => {
-  const [mode, setMode] = useState(initialMode || 'login');
+export const AuthPage = ({ mode, onSuccess, onModeChange, onBack }) => {
   const [form, setForm] = useState({ name: '', email: '', password: '', code: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const [resetDone, setResetDone] = useState(false);
+
+  // Reset transient state when mode changes (also clears stale loading from bfcache)
+  useEffect(() => {
+    setLoading(false);
+    setError('');
+  }, [mode]);
+
+  // Handle browser bfcache (back button after Google redirect): force loading off
+  useEffect(() => {
+    const onPageShow = (e) => { if (e.persisted) { setLoading(false); setError(''); } };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
+
+  const setMode = (newMode) => onModeChange(newMode);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
