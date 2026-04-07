@@ -4,21 +4,30 @@ const path = require('path');
 require('dotenv').config();
 
 const authRoutes = require('./routes/authRoutes');
+const accountAuthRoutes = require('./routes/accountAuthRoutes');
 const clientRoutes = require('./routes/clientRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const courseRoutes = require('./routes/courseRoutes');
+const questionnaireRoutes = require('./routes/questionnaireRoutes');
+const signingRoutes = require('./routes/signingRoutes');
+const { accountAuth } = require('./middlewares/accountMiddleware');
 
 const app = express();
 
 // Middlewares
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
-// API Routes
+// Public API Routes (no tenant auth required)
 app.use('/api/auth', authRoutes);
-app.use('/api/clients', clientRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/courses', courseRoutes);
+app.use('/api/account', accountAuthRoutes);
+app.use('/api/signing', signingRoutes); // public signing endpoints
+app.use('/api/questionnaires', questionnaireRoutes); // public questionnaire endpoints
+
+// Protected API Routes (require account JWT — tenant-scoped)
+app.use('/api/clients', accountAuth, clientRoutes);
+app.use('/api/admin', accountAuth, adminRoutes);
+app.use('/api/courses', accountAuth, courseRoutes);
 
 // Static files (Frontend Build)
 app.use(express.static(path.join(__dirname, '../frontend/dist')));

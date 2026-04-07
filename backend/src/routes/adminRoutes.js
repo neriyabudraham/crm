@@ -18,7 +18,8 @@ router.patch('/fields/:id', customFieldController.updateField);
 router.patch('/fields/:id/options', async (req, res) => {
     const { options } = req.body;
     try {
-        await require('../config/db').query('UPDATE custom_fields SET options = $1 WHERE id = $2', [JSON.stringify(options), req.params.id]);
+        const r = await require('../config/db').query('UPDATE custom_fields SET options = $1 WHERE id = $2 AND account_id = $3', [JSON.stringify(options), req.params.id, req.accountId]);
+        if (r.rowCount === 0) return res.status(404).json({ error: 'שדה לא נמצא' });
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -28,12 +29,7 @@ router.delete('/fields/:id', customFieldController.deleteField);
 router.get('/payments/client/:clientId', paymentController.getClientPayments);
 router.post('/payments/schedule', paymentController.createSchedule);
 router.patch('/payments/:id', paymentController.updateStatus);
-router.delete('/payments/:id', async (req, res) => {
-    try {
-        await require('../config/db').query('DELETE FROM payments WHERE id = $1', [req.params.id]);
-        res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
+router.delete('/payments/:id', paymentController.deletePayment);
 
 // טמפלייטים
 router.get('/templates', templateController.getTemplates);
@@ -52,10 +48,13 @@ router.get('/whatsapp/groups/:session', async (req, res) => {
     }
 });
 
-// נתיבים להגדרות מערכת
+// נתיבים להגדרות מערכת — מסונן לפי account
 router.get('/settings/:key', async (req, res) => {
     try {
-        const result = await require('../config/db').query('SELECT values FROM system_settings WHERE key = $1', [req.params.key]);
+        const result = await require('../config/db').query(
+            'SELECT values FROM system_settings WHERE key = $1 AND account_id = $2',
+            [req.params.key, req.accountId]
+        );
         res.json(result.rows[0]?.values || []);
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -64,8 +63,9 @@ router.post('/settings/:key', async (req, res) => {
     try {
         const { values } = req.body;
         await require('../config/db').query(
-            'INSERT INTO system_settings (key, values) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET values = $2',
-            [req.params.key, JSON.stringify(values)]
+            `INSERT INTO system_settings (key, values, account_id) VALUES ($1, $2, $3)
+             ON CONFLICT (key, account_id) DO UPDATE SET values = $2`,
+            [req.params.key, JSON.stringify(values), req.accountId]
         );
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
@@ -74,7 +74,10 @@ router.post('/settings/:key', async (req, res) => {
 // ניהול סוגי ישויות (entity types)
 router.get('/entity-types', async (req, res) => {
     try {
-        const result = await require('../config/db').query('SELECT values FROM system_settings WHERE key = $1', ['entity_types']);
+        const result = await require('../config/db').query(
+            'SELECT values FROM system_settings WHERE key = $1 AND account_id = $2',
+            ['entity_types', req.accountId]
+        );
         res.json(result.rows[0]?.values || []);
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -83,8 +86,9 @@ router.post('/entity-types', async (req, res) => {
     try {
         const { values } = req.body;
         await require('../config/db').query(
-            'INSERT INTO system_settings (key, values) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET values = $2',
-            ['entity_types', JSON.stringify(values)]
+            `INSERT INTO system_settings (key, values, account_id) VALUES ($1, $2, $3)
+             ON CONFLICT (key, account_id) DO UPDATE SET values = $2`,
+            ['entity_types', JSON.stringify(values), req.accountId]
         );
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }

@@ -5,15 +5,24 @@ const db = require('../config/db');
 const { PDFDocument } = require('pdf-lib');
 const fs = require('fs');
 const path = require('path');
+const { accountAuth } = require('../middlewares/accountMiddleware');
 
-// יצירת session חתימה עם טוקן ייחודי
-router.post('/sessions', async (req, res) => {
+// יצירת session חתימה עם טוקן ייחודי — מוגן
+router.post('/sessions', accountAuth, async (req, res) => {
     const { client_id, template_id } = req.body;
     const token = crypto.randomBytes(32).toString('hex');
     try {
+        // ודא בעלות
+        const own = await db.query(
+            'SELECT (SELECT account_id FROM clients WHERE id = $1) AS c, (SELECT account_id FROM pdf_templates WHERE id = $2) AS t',
+            [client_id, template_id]
+        );
+        if (own.rows[0].c !== req.accountId || own.rows[0].t !== req.accountId) {
+            return res.status(403).json({ error: 'אין הרשאה' });
+        }
         const result = await db.query(
-            'INSERT INTO signing_sessions (token, client_id, template_id) VALUES ($1, $2, $3) RETURNING *',
-            [token, client_id, template_id]
+            'INSERT INTO signing_sessions (token, client_id, template_id, account_id) VALUES ($1, $2, $3, $4) RETURNING *',
+            [token, client_id, template_id, req.accountId]
         );
         const signingUrl = `https://crm.botomat.co.il/sign/${token}`;
         res.json({ session: result.rows[0], signingUrl });
@@ -215,8 +224,8 @@ router.post('/session/:token/sign', async (req, res) => {
 
         // שמירת מסמך חתום
         await db.query(
-            'INSERT INTO signed_documents (client_id, template_id, session_id, file_path) VALUES ($1, $2, $3, $4)',
-            [session.client_id, session.template_id, session.id, 'uploads/' + fileName]
+            'INSERT INTO signed_documents (client_id, template_id, session_id, file_path, account_id) VALUES ($1, $2, $3, $4, $5)',
+            [session.client_id, session.template_id, session.id, 'uploads/' + fileName, session.account_id]
         );
 
         if (global.notifyClient) global.notifyClient(session.client_id, 'client_updated');
@@ -232,50 +241,52 @@ router.post('/session/:token/sign', async (req, res) => {
     }
 });
 
-// רשימת מסמכים חתומים של ליד
-router.get('/client/:clientId/documents', async (req, res) => {
+// רשימת מסמכים חתומים של ליד — מוגן
+router.get('/client/:clientId/documents', accountAuth, async (req, res) => {
     try {
         const result = await db.query(
             `SELECT sd.*, pt.name as template_name
              FROM signed_documents sd
              JOIN pdf_templates pt ON sd.template_id = pt.id
-             WHERE sd.client_id = $1 ORDER BY sd.signed_at DESC`,
-            [req.params.clientId]
+             JOIN clients c ON c.id = sd.client_id
+             WHERE sd.client_id = $1 AND c.account_id = $2 ORDER BY sd.signed_at DESC`,
+            [req.params.clientId, req.accountId]
         );
         res.json(result.rows);
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// מחיקת session חתימה
-router.delete('/sessions/:id', async (req, res) => {
+// מחיקת session חתימה — מוגן
+router.delete('/sessions/:id', accountAuth, async (req, res) => {
     try {
-        await db.query('DELETE FROM signing_sessions WHERE id = $1', [req.params.id]);
+        const r = await db.query('DELETE FROM signing_sessions WHERE id = $1 AND account_id = $2', [req.params.id, req.accountId]);
+        if (r.rowCount === 0) return res.status(404).json({ error: 'לא נמצא' });
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// מחיקת מסמך חתום
-router.delete('/documents/:id', async (req, res) => {
+// מחיקת מסמך חתום — מוגן
+router.delete('/documents/:id', accountAuth, async (req, res) => {
     try {
-        const doc = await db.query('SELECT file_path FROM signed_documents WHERE id = $1', [req.params.id]);
-        if (doc.rows[0]) {
-            const filePath = path.join(__dirname, '../../', doc.rows[0].file_path);
-            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-        }
-        await db.query('DELETE FROM signed_documents WHERE id = $1', [req.params.id]);
+        const doc = await db.query('SELECT file_path FROM signed_documents WHERE id = $1 AND account_id = $2', [req.params.id, req.accountId]);
+        if (!doc.rows[0]) return res.status(404).json({ error: 'לא נמצא' });
+        const filePath = path.join(__dirname, '../../', doc.rows[0].file_path);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        await db.query('DELETE FROM signed_documents WHERE id = $1 AND account_id = $2', [req.params.id, req.accountId]);
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// רשימת sessions חתימה של ליד
-router.get('/client/:clientId/sessions', async (req, res) => {
+// רשימת sessions חתימה של ליד — מוגן
+router.get('/client/:clientId/sessions', accountAuth, async (req, res) => {
     try {
         const result = await db.query(
             `SELECT ss.*, pt.name as template_name
              FROM signing_sessions ss
              JOIN pdf_templates pt ON ss.template_id = pt.id
-             WHERE ss.client_id = $1 ORDER BY ss.created_at DESC`,
-            [req.params.clientId]
+             JOIN clients c ON c.id = ss.client_id
+             WHERE ss.client_id = $1 AND c.account_id = $2 ORDER BY ss.created_at DESC`,
+            [req.params.clientId, req.accountId]
         );
         res.json(result.rows);
     } catch (err) { res.status(500).json({ error: err.message }); }
