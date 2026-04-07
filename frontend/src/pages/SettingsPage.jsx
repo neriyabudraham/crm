@@ -28,6 +28,36 @@ export const SettingsPage = () => {
   const [visualEditor, setVisualEditor] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [questionnaires, setQuestionnaires] = useState([]);
+
+  // API Keys state
+  const [apiKeys, setApiKeys] = useState([]);
+  const [newApiKeyName, setNewApiKeyName] = useState('');
+  const [newlyCreatedKey, setNewlyCreatedKey] = useState(null);
+
+  const loadApiKeys = () => api.get('/v1/api-keys').then(r => setApiKeys(r.data || [])).catch(() => {});
+
+  const createApiKey = async () => {
+    if (!newApiKeyName.trim()) return;
+    try {
+      const r = await api.post('/v1/api-keys', { name: newApiKeyName });
+      setNewlyCreatedKey(r.data);
+      setNewApiKeyName('');
+      loadApiKeys();
+    } catch (err) { alert(err.response?.data?.error || 'שגיאה'); }
+  };
+
+  const toggleApiKey = async (id, is_active) => {
+    await api.patch(`/v1/api-keys/${id}`, { is_active });
+    loadApiKeys();
+  };
+
+  const deleteApiKey = async (id, name) => {
+    if (!confirm(`למחוק את המפתח "${name}"? כל אינטגרציה שמשתמשת בו תפסיק לעבוד.`)) return;
+    await api.delete(`/v1/api-keys/${id}`);
+    loadApiKeys();
+  };
+
+  useEffect(() => { if (activeTab === 'api_keys') loadApiKeys(); }, [activeTab]);
   const [editingQuestionnaire, setEditingQuestionnaire] = useState(null);
   const [customFieldsList, setCustomFieldsList] = useState([]);
 
@@ -255,6 +285,7 @@ export const SettingsPage = () => {
     { id: 'templates', label: 'תבניות חתימה', icon: '✍️' },
     { id: 'questionnaires', label: 'שאלונים', icon: '📋' },
     { id: 'entity_types', label: 'מודולים נוספים', icon: '🧩' },
+    { id: 'api_keys', label: 'API Keys', icon: '🔑' },
   ];
 
   return (
@@ -737,6 +768,67 @@ export const SettingsPage = () => {
               <div key={idx} className="p-5 bg-gray-50 rounded-2xl flex items-center justify-between">
                 <div className="flex items-center gap-3"><span className="text-xl">{et.icon || '📂'}</span><span className="font-bold">{et.label}</span><span className="text-[10px] text-gray-400">({et.id})</span></div>
                 <button onClick={() => removeEntityType(idx)} className="text-red-400 hover:text-red-600 font-bold text-sm">מחק</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* API Keys */}
+      {activeTab === 'api_keys' && (
+        <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm p-10">
+          <div className="flex items-start justify-between mb-2">
+            <h3 className="text-2xl font-black">API Keys</h3>
+            <a href="/api/docs" target="_blank" rel="noreferrer" className="text-xs bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-xl font-bold text-gray-700">📚 תיעוד API (Swagger)</a>
+          </div>
+          <p className="text-gray-400 text-sm mb-8">צור מפתחות גישה לשימוש באינטגרציות חיצוניות. כל מפתח מקבל גישה לחשבון שלך דרך <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">X-API-Key</code> header.</p>
+
+          {newlyCreatedKey && (
+            <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-6 mb-6">
+              <div className="flex items-start justify-between mb-3">
+                <h4 className="font-black text-amber-900">⚠️ שמור את המפתח הזה — הוא לא יוצג שוב!</h4>
+                <button onClick={() => setNewlyCreatedKey(null)} className="text-amber-700 hover:text-amber-900 font-bold">✕</button>
+              </div>
+              <code className="block bg-white p-4 rounded-xl text-xs break-all font-mono select-all">{newlyCreatedKey.key}</code>
+              <button
+                onClick={() => { navigator.clipboard.writeText(newlyCreatedKey.key); alert('הועתק'); }}
+                className="mt-3 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl font-bold text-sm"
+              >העתק</button>
+            </div>
+          )}
+
+          <div className="bg-gray-50 p-6 rounded-3xl mb-8">
+            <div className="flex gap-3">
+              <input
+                placeholder="שם המפתח (לדוג: Zapier Integration)"
+                className="flex-1 p-4 rounded-xl outline-none font-bold"
+                value={newApiKeyName}
+                onChange={e => setNewApiKeyName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && createApiKey()}
+              />
+              <button onClick={createApiKey} className="bg-gray-900 text-white px-6 rounded-xl font-black">+ צור מפתח</button>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {apiKeys.length === 0 && <p className="text-gray-400 text-center py-8 font-bold">אין מפתחות פעילים</p>}
+            {apiKeys.map(k => (
+              <div key={k.id} className={`p-5 rounded-2xl flex items-center justify-between ${k.is_active ? 'bg-gray-50' : 'bg-red-50 opacity-70'}`}>
+                <div>
+                  <div className="font-bold text-gray-900">{k.name}</div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    {k.request_count} בקשות · {k.last_used ? `שימוש אחרון: ${new Date(k.last_used).toLocaleString('he-IL')}` : 'לא נעשה שימוש'}
+                  </div>
+                </div>
+                <div className="flex gap-2 items-center">
+                  <span className={`text-[10px] px-2 py-1 rounded-full font-bold ${k.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    {k.is_active ? 'פעיל' : 'חסום'}
+                  </span>
+                  <button onClick={() => toggleApiKey(k.id, !k.is_active)} className="text-xs bg-amber-100 text-amber-700 px-3 py-1.5 rounded-lg font-bold hover:bg-amber-200">
+                    {k.is_active ? 'חסום' : 'הפעל'}
+                  </button>
+                  <button onClick={() => deleteApiKey(k.id, k.name)} className="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded-lg font-bold hover:bg-red-200">מחק</button>
+                </div>
               </div>
             ))}
           </div>

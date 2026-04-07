@@ -11,6 +11,9 @@ const courseRoutes = require('./routes/courseRoutes');
 const signingRoutes = require('./routes/signingRoutes');
 const questionnaireRoutes = require('./routes/questionnaireRoutes');
 const superAdminRoutes = require('./routes/superAdminRoutes');
+const v1Routes = require('./routes/v1');
+const swaggerSpec = require('./config/swagger');
+const swaggerUi = require('swagger-ui-express');
 const upload = require('./middlewares/uploadMiddleware');
 const { accountAuth } = require('./middlewares/accountMiddleware');
 
@@ -26,6 +29,16 @@ app.use('/api/auth', authRoutes);
 
 // Super Admin (separate auth namespace, mostly self-protected by superAdminAuth)
 app.use('/api/superadmin', superAdminRoutes);
+
+// Public API v1 — supports X-API-Key or Bearer JWT
+app.use('/api/v1', v1Routes);
+
+// Swagger UI
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+    customSiteTitle: 'Botomat CRM API',
+    customCss: '.swagger-ui .topbar { display: none }'
+}));
+app.get('/api/docs.json', (req, res) => res.json(swaggerSpec));
 
 // Public token-based endpoints — must come BEFORE protected routes since
 // signingRoutes/questionnaireRoutes contain BOTH public token endpoints

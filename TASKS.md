@@ -41,13 +41,14 @@
 - [x] 4.6 סטטיסטיקות מערכת — accounts/clients/payments/signed_docs/questionnaires/plans/new_30d
 
 ## שלב 5: API מלא + Swagger + API Keys
-- [ ] 5.1 Backend: /api/v1/ router מרכזי
-- [ ] 5.2 Endpoints: clients, payments, questionnaires, signing, settings (CRUD מתועד)
-- [ ] 5.3 Backend: API key middleware
+- [x] 5.1 Backend: /api/v1/ router מרכזי (`backend/src/routes/v1/index.js`)
+- [x] 5.2 Endpoints: clients (CRUD), payments (CRUD), questionnaires (read+sessions), api-keys (CRUD)
+- [x] 5.3 Backend: API key middleware עם sha256 hash, rate limit (60/min/key), tracking של last_used + request_count
 - [x] 5.4 DB: טבלת api_keys
-- [ ] 5.5 Frontend: דף ניהול API keys
-- [ ] 5.6 Swagger: swagger-jsdoc + swagger-ui-express
-- [ ] 5.7 Endpoint: GET /api/docs
+- [x] 5.5 Frontend: דף ניהול API keys בטאב חדש בהגדרות (יצירה, חסימה, מחיקה, הצגת raw key פעם אחת)
+- [x] 5.6 Swagger: swagger-jsdoc + swagger-ui-express עם JSDoc על כל endpoint
+- [x] 5.7 GET /api/docs (UI) ו-GET /api/docs.json (spec)
+- [ ] 5.8 Dual auth: כל endpoint תחת /v1 תומך גם ב-X-API-Key וגם ב-Bearer JWT (`dualAuth` middleware) ✅
 
 ## שלב 6: שיפורים ובדיקות
 - [ ] 6.1 בדיקה מלאה של כל הflows
